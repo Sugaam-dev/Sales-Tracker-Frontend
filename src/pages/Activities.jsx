@@ -1,0 +1,1160 @@
+import React, { useState, useEffect } from 'react';
+import { Phone, Mail, Calendar, MonitorPlay, Globe, Plus, X, Play, Pause, Paperclip, FileText, CheckCircle2, Clock, Sparkles, RefreshCw, ChevronUp, ChevronDown } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { initialLeadsData } from './mockLeads';
+import './Activities.css';
+
+// Helper to generate dynamic activities based on mockLeads dataset
+const generateActivities = () => {
+  const list = [];
+  let actId = 1;
+  initialLeadsData.forEach((lead) => {
+    // 1. Lead Profile Created (Other)
+    list.push({
+      id: actId++,
+      type: 'Other',
+      desc: `Lead profile created for ${lead.company} (${lead.contact})`,
+      lead: lead.company,
+      rep: lead.owner,
+      time: lead.createdAt.replace('T', ' ').substring(0, 16),
+      outcome: 'Success',
+      icon: <FileText size={14} />,
+      colorClass: 'other-icon',
+      geo: lead.region,
+      industry: lead.industry,
+      dealSize: parseInt(lead.value.replace(/[^0-9]/g, ''), 10) > 150000 ? 'Large' : parseInt(lead.value.replace(/[^0-9]/g, ''), 10) > 50000 ? 'Medium' : 'Small'
+    });
+
+    // 2. Email Activity for most leads
+    if (['Prospecting', 'Qualification', 'Needs Analysis', 'Proposal', 'Negotiation', 'Closed Won', 'Closed Lost'].includes(lead.stage)) {
+      list.push({
+        id: actId++,
+        type: 'Email',
+        desc: `Sent introduction email and product presentation deck to ${lead.contact}`,
+        lead: lead.company,
+        rep: lead.owner,
+        time: new Date(new Date(lead.createdAt).getTime() + 2 * 3600000).toISOString().replace('T', ' ').substring(0, 16),
+        outcome: 'Interested',
+        icon: <Mail size={14} />,
+        colorClass: 'email-icon',
+        geo: lead.region,
+        industry: lead.industry,
+        dealSize: parseInt(lead.value.replace(/[^0-9]/g, ''), 10) > 150000 ? 'Large' : parseInt(lead.value.replace(/[^0-9]/g, ''), 10) > 50000 ? 'Medium' : 'Small'
+      });
+    }
+
+    // 3. Call Activity
+    if (['Needs Analysis', 'Proposal', 'Negotiation', 'Closed Won'].includes(lead.stage)) {
+      list.push({
+        id: actId++,
+        type: 'Call',
+        desc: `Requirements assessment call with ${lead.contact}`,
+        lead: lead.company,
+        rep: lead.owner,
+        time: new Date(new Date(lead.createdAt).getTime() + 24 * 3600000).toISOString().replace('T', ' ').substring(0, 16),
+        outcome: 'Scheduled Demo',
+        icon: <Phone size={14} />,
+        colorClass: 'call-icon',
+        geo: lead.region,
+        industry: lead.industry,
+        dealSize: parseInt(lead.value.replace(/[^0-9]/g, ''), 10) > 150000 ? 'Large' : parseInt(lead.value.replace(/[^0-9]/g, ''), 10) > 50000 ? 'Medium' : 'Small'
+      });
+    }
+
+    // 4. Demo Activity
+    if (['Proposal', 'Negotiation', 'Closed Won'].includes(lead.stage)) {
+      list.push({
+        id: actId++,
+        type: 'Demo',
+        desc: `Virtual product demonstration and SLA capability review`,
+        lead: lead.company,
+        rep: lead.owner,
+        time: new Date(new Date(lead.createdAt).getTime() + 48 * 3600000).toISOString().replace('T', ' ').substring(0, 16),
+        outcome: 'Highly Positive',
+        icon: <MonitorPlay size={14} />,
+        colorClass: 'demo-icon',
+        geo: lead.region,
+        industry: lead.industry,
+        dealSize: parseInt(lead.value.replace(/[^0-9]/g, ''), 10) > 150000 ? 'Large' : parseInt(lead.value.replace(/[^0-9]/g, ''), 10) > 50000 ? 'Medium' : 'Small'
+      });
+    }
+
+    // 5. Proposal Sent Activity
+    if (['Negotiation', 'Closed Won'].includes(lead.stage)) {
+      list.push({
+        id: actId++,
+        type: 'Proposal Sent',
+        desc: `Emailed formal commercial proposal valuing ${lead.value}`,
+        lead: lead.company,
+        rep: lead.owner,
+        time: new Date(new Date(lead.createdAt).getTime() + 72 * 3600000).toISOString().replace('T', ' ').substring(0, 16),
+        outcome: 'Proposal Sent',
+        icon: <Mail size={14} />,
+        colorClass: 'proposal-icon',
+        geo: lead.region,
+        industry: lead.industry,
+        dealSize: parseInt(lead.value.replace(/[^0-9]/g, ''), 10) > 150000 ? 'Large' : parseInt(lead.value.replace(/[^0-9]/g, ''), 10) > 50000 ? 'Medium' : 'Small'
+      });
+    }
+  });
+
+  // Sort latest first
+  return list.sort((a, b) => new Date(b.time) - new Date(a.time));
+};
+
+export default function Activities() {
+  const [activeFilter, setActiveFilter] = useState('All Activity Types');
+  const [userFilter, setUserFilter] = useState('All Users');
+  const [leadFilter, setLeadFilter] = useState('All Leads');
+  const [geoFilter, setGeoFilter] = useState('All Geographies');
+  const [industryFilter, setIndustryFilter] = useState('All Industries');
+  const [sizeFilter, setSizeFilter] = useState('All Deal Sizes');
+  const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
+  const [selectedActivity, setSelectedActivity] = useState(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackTime, setPlaybackTime] = useState(0);
+  const [demoProgress, setDemoProgress] = useState(0);
+
+  useEffect(() => {
+    let interval = null;
+    if (isPlaying && selectedActivity) {
+      interval = setInterval(() => {
+        if (selectedActivity.type === 'Call') {
+          setPlaybackTime((prev) => (prev >= 165 ? 0 : prev + 1));
+        } else if (selectedActivity.type === 'Demo') {
+          setDemoProgress((prev) => {
+            if (prev >= 100) {
+              setIsPlaying(false);
+              return 0;
+            }
+            return prev + 4;
+          });
+        }
+      }, 1000);
+    } else {
+      clearInterval(interval);
+    }
+    return () => clearInterval(interval);
+  }, [isPlaying, selectedActivity]);
+
+  useEffect(() => {
+    setIsPlaying(false);
+    setPlaybackTime(0);
+    setDemoProgress(0);
+  }, [selectedActivity]);
+
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [isAiExpanded, setIsAiExpanded] = useState(() => {
+    const saved = sessionStorage.getItem('isAiExpanded_activities');
+    return saved !== null ? JSON.parse(saved) : true;
+  });
+
+  useEffect(() => {
+    sessionStorage.setItem('isAiExpanded_activities', JSON.stringify(isAiExpanded));
+  }, [isAiExpanded]);
+
+  const handleRefreshAi = () => {
+    setIsAiLoading(true);
+    setTimeout(() => {
+      setIsAiLoading(false);
+    }, 1000);
+  };
+
+  const [activitiesData, setActivitiesData] = useState(() => generateActivities());
+
+  const [activeActivityModal, setActiveActivityModal] = useState(null);
+  const [actSearch, setActSearch] = useState('');
+  const [actOwnerFilter, setActOwnerFilter] = useState('');
+  const [actPriorityFilter, setActPriorityFilter] = useState('');
+  const [actTypeFilter, setActTypeFilter] = useState('');
+  const [actPage, setActPage] = useState(1);
+  const actItemsPerPage = 5;
+  const navigate = useNavigate();
+
+  const handleOpenActivityModal = (title, list) => {
+    setActiveActivityModal({ title, list });
+    setActSearch('');
+    setActOwnerFilter('');
+    setActPriorityFilter('');
+    setActTypeFilter('');
+    setActPage(1);
+  };
+
+  const getFilteredModalActivities = () => {
+    if (!activeActivityModal) return [];
+    let list = [...activeActivityModal.list];
+
+    if (actSearch.trim()) {
+      const q = actSearch.toLowerCase();
+      list = list.filter(a => 
+        a.company.toLowerCase().includes(q) || 
+        a.desc.toLowerCase().includes(q) ||
+        a.actId.toLowerCase().includes(q)
+      );
+    }
+
+    if (actOwnerFilter) {
+      list = list.filter(a => a.owner === actOwnerFilter);
+    }
+
+    if (actPriorityFilter) {
+      list = list.filter(a => a.priority === actPriorityFilter);
+    }
+
+    if (actTypeFilter) {
+      list = list.filter(a => a.type === actTypeFilter);
+    }
+
+    return list;
+  };
+
+  const overdueActivitiesList = initialLeadsData.filter(l => l.isOverdue || (l.status !== 'Won' && l.status !== 'Lost' && new Date(l.estDate) < new Date('2026-07-07'))).map(l => {
+    let actType = 'Call';
+    let actDesc = 'Follow-up Call';
+    if (l.stage === 'Proposal') { actType = 'Proposal Sent'; actDesc = 'Proposal Follow-up'; }
+    if (l.stage === 'Negotiation') { actType = 'Meeting'; actDesc = 'Contract Discussion'; }
+    if (l.stage === 'Needs Analysis') { actType = 'Demo'; actDesc = 'Product Demo'; }
+
+    const diffTime = Math.abs(new Date('2026-07-07') - new Date(l.estDate));
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    return {
+      actId: `ACT-${l.id.toString().padStart(4, '0')}`,
+      leadId: `L-${l.id.toString().padStart(4, '0')}`,
+      company: l.company,
+      contact: l.contact,
+      type: actType,
+      desc: actDesc,
+      owner: l.owner,
+      dueDate: l.estDate,
+      overdueBy: `${diffDays} Day${diffDays > 1 ? 's' : ''}`,
+      diffDays,
+      priority: l.priority || 'High',
+      status: l.status,
+      leadRaw: l
+    };
+  });
+
+  const upcomingActivitiesList = initialLeadsData.filter(l => l.status !== 'Won' && l.status !== 'Lost' && new Date(l.estDate) >= new Date('2026-07-07')).map(l => {
+    let actType = 'Call';
+    let actDesc = 'Follow-up Call';
+    if (l.stage === 'Proposal') { actType = 'Proposal Sent'; actDesc = 'Proposal Review'; }
+    if (l.stage === 'Negotiation') { actType = 'Meeting'; actDesc = 'Contract Discussion'; }
+    if (l.stage === 'Needs Analysis') { actType = 'Demo'; actDesc = 'Product Walkthrough'; }
+
+    const diffTime = new Date(l.estDate) - new Date('2026-07-07');
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    let scheduledDate = 'This Week';
+    if (diffDays === 0) scheduledDate = 'Today';
+    else if (diffDays === 1) scheduledDate = 'Tomorrow';
+    else if (diffDays > 7) scheduledDate = 'Next Week';
+
+    return {
+      actId: `ACT-${l.id.toString().padStart(4, '0')}`,
+      leadId: `L-${l.id.toString().padStart(4, '0')}`,
+      company: l.company,
+      contact: l.contact,
+      type: actType,
+      desc: actDesc,
+      owner: l.owner,
+      scheduledDate,
+      scheduledDateRaw: l.estDate,
+      scheduledTime: '10:00 AM',
+      priority: l.priority || 'Normal',
+      status: l.status,
+      leadRaw: l
+    };
+  });
+
+  const uniqueUsers = Array.from(new Set(initialLeadsData.map(l => l.owner))).filter(Boolean).sort();
+  const uniqueLeads = Array.from(new Set(initialLeadsData.map(l => l.company))).filter(Boolean).sort();
+  const uniqueGeos = Array.from(new Set(initialLeadsData.map(l => l.region))).filter(Boolean).sort();
+  const uniqueIndustries = Array.from(new Set(initialLeadsData.map(l => l.industry))).filter(Boolean).sort();
+
+  const pillTypes = [
+    { name: 'All', value: 'All Activity Types' },
+    { name: 'Call', value: 'Call' },
+    { name: 'Email', value: 'Email' },
+    { name: 'Meeting', value: 'Meeting' },
+    { name: 'Demo', value: 'Demo' },
+    { name: 'LinkedIn', value: 'LinkedIn' },
+    { name: 'Proposal Sent', value: 'Proposal Sent' },
+    { name: 'Other', value: 'Other' }
+  ];
+
+  const getPillCount = (value) => {
+    if (value === 'All Activity Types') {
+      return activitiesData.length;
+    }
+    if (value === 'Other') {
+      const standardTypes = ['Call', 'Email', 'Meeting', 'Demo', 'LinkedIn', 'Proposal Sent'];
+      return activitiesData.filter(act => !standardTypes.includes(act.type)).length;
+    }
+    return activitiesData.filter(act => act.type === value).length;
+  };
+
+  const filteredActivities = activitiesData.filter(activity => {
+    let matchesType = false;
+    if (activeFilter === 'All Activity Types') {
+      matchesType = true;
+    } else if (activeFilter === 'Other') {
+      const standardTypes = ['Call', 'Email', 'Meeting', 'Demo', 'LinkedIn', 'Proposal Sent'];
+      matchesType = !standardTypes.includes(activity.type);
+    } else {
+      matchesType = activity.type === activeFilter;
+    }
+    const matchesRep = userFilter === 'All Users' || activity.rep === userFilter;
+    const matchesLead = leadFilter === 'All Leads' || activity.lead === leadFilter;
+    const matchesGeo = geoFilter === 'All Geographies' || activity.geo === geoFilter;
+    const matchesIndustry = industryFilter === 'All Industries' || activity.industry === industryFilter;
+    const matchesSize = sizeFilter === 'All Deal Sizes' || activity.dealSize === sizeFilter;
+    return matchesType && matchesRep && matchesLead && matchesGeo && matchesIndustry && matchesSize;
+  });
+
+  const handleLogActivity = (e) => {
+    e.preventDefault();
+    const type = e.target.elements.type.value;
+    const desc = e.target.elements.desc.value;
+    const lead = e.target.elements.lead.value;
+    const outcome = e.target.elements.outcome.value;
+    const geo = e.target.elements.geo.value;
+    const industry = e.target.elements.industry.value;
+    const dealSize = e.target.elements.dealSize.value;
+    
+    let icon, colorClass;
+    if (type === 'Email') { icon = <Mail size={14} />; colorClass = 'email-icon'; }
+    else if (type === 'Call') { icon = <Phone size={14} />; colorClass = 'call-icon'; }
+    else if (type === 'Meeting') { icon = <Calendar size={14} />; colorClass = 'meeting-icon'; }
+    else if (type === 'Demo') { icon = <MonitorPlay size={14} />; colorClass = 'demo-icon'; }
+    else if (type === 'LinkedIn') { icon = <Globe size={14} />; colorClass = 'linkedin-icon'; }
+    else if (type === 'Proposal Sent') { icon = <Mail size={14} />; colorClass = 'proposal-icon'; }
+    else { icon = <Globe size={14} />; colorClass = 'other-icon'; }
+
+    const newActivity = {
+      id: Date.now(),
+      type, desc, lead, rep: 'You', time: new Date().toLocaleString([], {year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute:'2-digit'}), outcome, icon, colorClass, geo, industry, dealSize
+    };
+    
+    setActivitiesData([newActivity, ...activitiesData]);
+    setIsActivityModalOpen(false);
+  };
+
+  return (
+    <div className="activities-container">
+      <div className="activities-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h1 className="page-title" style={{ margin: 0 }}>Activities Timeline</h1>
+        <button className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', fontSize: '14px' }} onClick={() => setIsActivityModalOpen(true)}>
+          <Plus size={14} /> Log Activity
+        </button>
+      </div>
+
+      {/* AI Summary Card for Activities */}
+      <div className="card ai-summary-premium-card">
+        <div className="ai-card-glow"></div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Sparkles size={20} style={{ color: '#FFFFFF' }} />
+            <h3 style={{ margin: 0, fontSize: '1.125rem', fontWeight: '600', color: 'white' }}>AI Productivity Assistant</h3>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <button 
+              onClick={handleRefreshAi} 
+              disabled={isAiLoading} 
+              title="Refresh AI Insights"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#FFFFFF' }}
+            >
+              <RefreshCw size={18} style={{ animation: isAiLoading ? 'rotateSparkle 1.5s infinite linear' : 'none' }} />
+            </button>
+            <button 
+              onClick={() => setIsAiExpanded(!isAiExpanded)} 
+              title={isAiExpanded ? "Collapse Insights" : "Expand Insights"}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#FFFFFF' }}
+            >
+              {isAiExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+            </button>
+          </div>
+        </div>
+
+        <div 
+          style={{ 
+            maxHeight: isAiExpanded ? '500px' : '0px', 
+            overflow: 'hidden', 
+            transition: 'max-height 300ms ease-in-out, opacity 300ms ease-in-out, padding 300ms ease-in-out',
+            opacity: isAiExpanded ? 1 : 0
+          }}
+        >
+          {isAiLoading ? (
+            <div className="ai-skeleton-loader" style={{ padding: '16px 0' }}>
+              <div className="skeleton-item" style={{ height: '16px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', marginBottom: '8px', width: '80%' }}></div>
+              <div className="skeleton-item" style={{ height: '16px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', marginBottom: '8px', width: '60%' }}></div>
+              <div className="skeleton-item" style={{ height: '16px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', width: '40%' }}></div>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', paddingTop: '16px' }}>
+              <div className="ai-premium-stat-box">
+                <div className="ai-premium-stat-title">Today's Velocity</div>
+                <div className="ai-premium-stat-value" style={{ color: '#34D399' }}>12 Logged</div>
+                <div className="ai-premium-stat-desc">4 Completed · 8 Planned</div>
+              </div>
+              <div className="ai-premium-stat-box">
+                <div className="ai-premium-stat-title">Tasks Health</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '13px' }}>
+                  <span style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={() => handleOpenActivityModal('Overdue Tasks', overdueActivitiesList)}>⚠️ {overdueActivitiesList.length} Overdue</span>
+                  <span style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={() => handleOpenActivityModal('Upcoming Tasks', upcomingActivitiesList)}>📅 {upcomingActivitiesList.length} Upcoming</span>
+                </div>
+              </div>
+              <div className="ai-premium-recommendation-box">
+                <div className="ai-premium-recommendation-title">AI Performance Recommendation</div>
+                <div className="ai-premium-recommendation-text">
+                  ⚡ **Follow-up Velocity is Stalling:** Your team average call duration is 2.5 minutes, but closing rates improve by 40% when calls last &gt;5 minutes. Ask open-ended questions about budget constraints in proposal stages.
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Grid of Filter Dropdowns */}
+      <div className="activities-filters-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', backgroundColor: 'var(--color-surface)', padding: '16px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
+        {/* Search by User */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <label style={{ fontSize: '11px', fontWeight: '600', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Search by User</label>
+          <select value={userFilter} onChange={(e) => setUserFilter(e.target.value)} className="activities-select" style={{ width: '100%', minWidth: 'auto', padding: '8px 12px' }}>
+            <option>All Users</option>
+            {uniqueUsers.map(u => <option key={u}>{u}</option>)}
+          </select>
+        </div>
+
+        {/* Lead Name */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <label style={{ fontSize: '11px', fontWeight: '600', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Lead Name</label>
+          <select value={leadFilter} onChange={(e) => setLeadFilter(e.target.value)} className="activities-select" style={{ width: '100%', minWidth: 'auto', padding: '8px 12px' }}>
+            <option>All Leads</option>
+            {uniqueLeads.map(l => <option key={l}>{l}</option>)}
+          </select>
+        </div>
+
+        {/* Geography */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <label style={{ fontSize: '11px', fontWeight: '600', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Geography</label>
+          <select value={geoFilter} onChange={(e) => setGeoFilter(e.target.value)} className="activities-select" style={{ width: '100%', minWidth: 'auto', padding: '8px 12px' }}>
+            <option>All Geographies</option>
+            {uniqueGeos.map(g => <option key={g}>{g}</option>)}
+          </select>
+        </div>
+
+        {/* Industry */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <label style={{ fontSize: '11px', fontWeight: '600', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Industry</label>
+          <select value={industryFilter} onChange={(e) => setIndustryFilter(e.target.value)} className="activities-select" style={{ width: '100%', minWidth: 'auto', padding: '8px 12px' }}>
+            <option>All Industries</option>
+            {uniqueIndustries.map(i => <option key={i}>{i}</option>)}
+          </select>
+        </div>
+
+        {/* Deal Size */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <label style={{ fontSize: '11px', fontWeight: '600', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Deal Size</label>
+          <select value={sizeFilter} onChange={(e) => setSizeFilter(e.target.value)} className="activities-select" style={{ width: '100%', minWidth: 'auto', padding: '8px 12px' }}>
+            <option>All Deal Sizes</option>
+            <option>Small</option>
+            <option>Medium</option>
+            <option>Large</option>
+          </select>
+        </div>
+      </div>
+
+
+
+      {/* Activities Timeline list (main card) */}
+      <div className="activities-main-card" style={{ padding: '28px' }}>
+        <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--color-text-main)', margin: '0 0 16px 0' }}>Activity Log</h2>
+        
+        {/* Filter Pills inside card */}
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', borderBottom: '1px solid var(--color-border)', paddingBottom: '16px', marginBottom: '26px' }}>
+          {pillTypes.map(pill => {
+            const isSelected = activeFilter === pill.value;
+            const count = getPillCount(pill.value);
+            return (
+              <button 
+                key={pill.name} 
+                onClick={() => setActiveFilter(pill.value)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '8px 16px',
+                  borderRadius: '24px',
+                  border: isSelected ? 'none' : '1px solid var(--color-border)',
+                  backgroundColor: isSelected ? 'var(--color-primary)' : 'var(--color-surface)',
+                  color: isSelected ? 'white' : 'var(--color-text-muted)',
+                  fontWeight: '500',
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <span>{pill.name}</span>
+                <span style={{ 
+                  backgroundColor: isSelected ? 'rgba(255, 255, 255, 0.2)' : '#F1F5F9', 
+                  color: isSelected ? 'white' : 'var(--color-text-muted)',
+                  padding: '2px 8px',
+                  borderRadius: '12px',
+                  fontSize: '11px',
+                  fontWeight: 'bold',
+                  marginLeft: '2px'
+                }}>{count}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="global-timeline-container">
+          <div className="timeline-line"></div>
+          {filteredActivities.length > 0 ? (
+            filteredActivities.map(activity => {
+              const isInteractive = true;
+              return (
+                <div key={activity.id} className="global-timeline-item">
+                  <div className={`timeline-circle ${activity.colorClass}`}>
+                    {activity.icon}
+                  </div>
+                  <div 
+                    className={`timeline-item-card ${isInteractive ? 'interactive' : ''}`}
+                    onClick={() => isInteractive && setSelectedActivity(activity)}
+                  >
+                    <div className="timeline-item-header">
+                      <div>
+                        <span className="timeline-item-type">{activity.type}</span> with <span className="timeline-item-lead">{activity.lead}</span>
+                      </div>
+                      <span className="timeline-item-time">{activity.time}</span>
+                    </div>
+                    <div className="timeline-item-rep">Logged by {activity.rep}</div>
+                    
+                    <div className="timeline-item-desc">
+                      {activity.desc}
+                    </div>
+                    
+                    {activity.outcome && (
+                      <div className="timeline-item-outcome">
+                        Outcome: {activity.outcome}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="no-activities">
+              <p>No activities found matching the selected filters.</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {isActivityModalOpen && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h3>Log New Activity</h3>
+              <button className="icon-btn" onClick={() => setIsActivityModalOpen(false)}><X size={20} /></button>
+            </div>
+            <form onSubmit={handleLogActivity} className="modal-form">
+              <div className="form-group">
+                <label>Activity Type</label>
+                <select name="type">
+                  <option>Email</option>
+                  <option>Call</option>
+                  <option>Meeting</option>
+                  <option>Demo</option>
+                  <option>LinkedIn</option>
+                  <option>Proposal Sent</option>
+                  <option>Other</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Lead / Company</label>
+                <input name="lead" type="text" required placeholder="e.g. Acme Corp" />
+              </div>
+              <div className="form-group">
+                <label>Geography</label>
+                <select name="geo">
+                  <option>North America</option>
+                  <option>Europe</option>
+                  <option>Asia Pacific</option>
+                  <option>LATAM</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Industry</label>
+                <select name="industry">
+                  <option>Technology</option>
+                  <option>Logistics</option>
+                  <option>Healthcare</option>
+                  <option>Finance</option>
+                  <option>IT</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Deal Size</label>
+                <select name="dealSize">
+                  <option>Small</option>
+                  <option>Medium</option>
+                  <option>Large</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Description</label>
+                <textarea name="desc" required placeholder="What happened?" rows={3}></textarea>
+              </div>
+              <div className="form-group">
+                <label>Outcome</label>
+                <input name="outcome" type="text" placeholder="e.g. Awaiting Reply" />
+              </div>
+              <div className="modal-actions">
+                <button type="button" className="btn-secondary" onClick={() => setIsActivityModalOpen(false)}>Cancel</button>
+                <button type="submit" className="btn-primary">Save Activity</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {selectedActivity && (
+        <div className="detail-modal-overlay" onClick={() => setSelectedActivity(null)}>
+          <div className="detail-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="detail-modal-header">
+              <div className="detail-modal-title">
+                <div className={`timeline-circle ${selectedActivity.colorClass}`} style={{ boxShadow: 'none' }}>
+                  {selectedActivity.icon}
+                </div>
+                <div>
+                  <h3 className="detail-modal-title-text">{selectedActivity.type} Detail</h3>
+                  <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>ID: #{selectedActivity.id}</span>
+                </div>
+              </div>
+              <button className="icon-btn" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted)' }} onClick={() => setSelectedActivity(null)}><X size={20} /></button>
+            </div>
+
+            <div className="detail-modal-body">
+              {/* Metadata Grid */}
+              <div className="detail-meta-grid">
+                <div className="detail-meta-item">
+                  <span className="detail-meta-label">Associated Lead</span>
+                  <span className="detail-meta-value" style={{ color: '#4F46E5', fontWeight: '600' }}>{selectedActivity.lead}</span>
+                </div>
+                <div className="detail-meta-item">
+                  <span className="detail-meta-label">Logged By</span>
+                  <span className="detail-meta-value">{selectedActivity.rep}</span>
+                </div>
+                <div className="detail-meta-item">
+                  <span className="detail-meta-label">Date & Time</span>
+                  <span className="detail-meta-value">{selectedActivity.time}</span>
+                </div>
+                <div className="detail-meta-item">
+                  <span className="detail-meta-label">Outcome</span>
+                  <div className="detail-meta-value">
+                    <span style={{
+                      backgroundColor: '#EEF2FF',
+                      color: '#4F46E5',
+                      padding: '2px 8px',
+                      borderRadius: '12px',
+                      fontSize: '11px',
+                      fontWeight: '500'
+                    }}>{selectedActivity.outcome || 'N/A'}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Dynamic Detail Content depending on Activity Type */}
+              {selectedActivity.type === 'Email' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div className="email-thread-box">
+                    <div className="email-thread-header">
+                      <div><strong>From:</strong> {selectedActivity.rep === 'You' ? 'sales@pmrg.com' : `${selectedActivity.rep.toLowerCase().replace(' ', '.')}@pmrg.com`}</div>
+                      <div><strong>To:</strong> contact@{selectedActivity.lead.toLowerCase().replace(' ', '')}.com</div>
+                      <div className="email-thread-subject"><strong>Subject:</strong> {selectedActivity.desc}</div>
+                    </div>
+                    <div className="email-thread-body">
+                      {`Hi Team,
+
+                      Thanks for taking the time to speak with us. As discussed, I am sharing the updated pricing and catalog details regarding your query for ${selectedActivity.lead}.
+
+                      We would love to set up a follow-up discussion to go through the custom deployment. Let me know what times work best for you next week.
+
+                      Best regards,
+                      ${selectedActivity.rep}`}
+                    </div>
+                    <div className="email-attachments">
+                      <Paperclip size={14} />
+                      <span>Attachments (1):</span>
+                      <div className="attachment-chip">
+                        <FileText size={14} style={{ color: '#4F46E5' }} />
+                        <span>PMRG_Enterprise_Proposal.pdf (1.8 MB)</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Quick Actions */}
+                  <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '8px' }}>
+                    <button className="btn-secondary" style={{ padding: '8px 16px', fontSize: '13px' }} onClick={() => alert('Reply simulation started!')}>Reply</button>
+                    <button className="btn-primary" style={{ padding: '8px 16px', fontSize: '13px' }} onClick={() => alert('Email resent successfully!')}>Resend Email</button>
+                  </div>
+                </div>
+              )}
+
+              {selectedActivity.type === 'Call' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--color-text-main)' }}>Recording & Audio Transcript</div>
+                  
+                  {/* Call Audio Player Simulation */}
+                  <div className="call-player-container">
+                    <div className="player-info">
+                      <span>Recorded Call Segment</span>
+                      <span>Duration: 02:45</span>
+                    </div>
+                    
+                    <div className="waveform-mock">
+                      {Array.from({ length: 28 }).map((_, idx) => {
+                        const heights = [20, 35, 15, 40, 25, 45, 10, 30, 20, 35, 48, 15, 25, 30, 40, 15, 25, 35, 45, 10, 25, 35, 15, 40, 25, 30, 15, 20];
+                        const barHeight = heights[idx] || 25;
+                        const isActive = isPlaying && (playbackTime % 28) >= idx;
+                        return (
+                          <div 
+                            key={idx} 
+                            className={`waveform-bar ${isActive ? 'active' : ''}`} 
+                            style={{ height: `${barHeight}%` }}
+                          />
+                        );
+                      })}
+                    </div>
+                    
+                    <div className="player-controls">
+                      <button className="play-pause-btn" onClick={() => setIsPlaying(!isPlaying)}>
+                        {isPlaying ? <Pause size={18} fill="white" /> : <Play size={18} fill="white" style={{ marginLeft: '2px' }} />}
+                      </button>
+                      <div className="player-time">
+                        {`00:${playbackTime < 10 ? '0' + playbackTime : playbackTime} / 02:45`}
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#94A3B8', backgroundColor: '#1E293B', padding: '4px 8px', borderRadius: '4px' }}>
+                        Sentiment: <span style={{ color: '#10B981', fontWeight: 'bold' }}>Positive</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Conversation Summary Notes */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--color-text-main)' }}>Key Points Highlighted:</span>
+                    <div style={{ backgroundColor: '#F8FAFC', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', padding: '14px', fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div className="checklist-item">
+                        <CheckCircle2 size={14} style={{ color: '#10B981' }} />
+                        <span>Lead expressed strong interest in workflow automation solutions.</span>
+                      </div>
+                      <div className="checklist-item">
+                        <CheckCircle2 size={14} style={{ color: '#10B981' }} />
+                        <span>Identified key decision makers: Lead VP of Tech & Regional Director.</span>
+                      </div>
+                      <div className="checklist-item">
+                        <Clock size={14} style={{ color: '#F59E0B' }} />
+                        <span>Next Step: Deliver tailored sandboxed environment details by next Friday.</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {selectedActivity.type === 'Demo' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--color-text-main)' }}>Demo Playback & Presentation Deck</div>
+                  
+                  {/* Demo Video Player Simulation */}
+                  <div className="demo-player-container">
+                    {!isPlaying ? (
+                      <div className="demo-video-placeholder">
+                        <MonitorPlay size={48} style={{ color: '#818CF8' }} />
+                        <span style={{ fontSize: '14px', fontWeight: '500' }}>Demo Session with {selectedActivity.lead}</span>
+                        <button className="demo-play-btn" onClick={() => setIsPlaying(true)}>
+                          <Play size={20} fill="white" style={{ marginLeft: '3px' }} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+                        {/* Mock Screen Share Interface */}
+                        <div style={{ 
+                          position: 'absolute', 
+                          top: 0, left: 0, right: 0, bottom: 0,
+                          background: 'radial-gradient(circle, #312E81 0%, #111827 100%)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          padding: '24px'
+                        }}>
+                          <div style={{ border: '2px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '20px', width: '80%', backgroundColor: 'rgba(0,0,0,0.4)', textAlign: 'center' }}>
+                            <Globe size={32} style={{ color: '#818CF8', marginBottom: '8px' }} />
+                            <div style={{ fontWeight: '600', fontSize: '14px' }}>PMRG Sales Dashboard Walkthrough</div>
+                            <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '4px' }}>Sharing Screen - Debabrata Ghosh</div>
+                          </div>
+                        </div>
+                        
+                        <div className="demo-progress-bar">
+                          <div className="demo-progress-fill" style={{ width: `${demoProgress}%` }} />
+                        </div>
+                        
+                        <div className="demo-video-hud">
+                          <button 
+                            style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}
+                            onClick={() => setIsPlaying(false)}
+                          >
+                            <Pause size={14} fill="white" />
+                          </button>
+                          <span>{`00:${demoProgress < 10 ? '0' + Math.floor(demoProgress/4) : Math.floor(demoProgress/4)} / 00:25`}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Checklist of Covered Features */}
+                  <div>
+                    <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--color-text-main)', marginBottom: '8px' }}>Features Demonstrated:</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+                      <div className="checklist-item">
+                        <CheckCircle2 size={14} style={{ color: '#10B981' }} />
+                        <span>Interactive Lifecycle Pipelines</span>
+                      </div>
+                      <div className="checklist-item">
+                        <CheckCircle2 size={14} style={{ color: '#10B981' }} />
+                        <span>Custom Vertical Stepper</span>
+                      </div>
+                      <div className="checklist-item">
+                        <CheckCircle2 size={14} style={{ color: '#10B981' }} />
+                        <span>Multi-factor Filters</span>
+                      </div>
+                      <div className="checklist-item">
+                        <CheckCircle2 size={14} style={{ color: '#10B981' }} />
+                        <span>Deal Size & Geo Segments</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {selectedActivity.type === 'Meeting' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--color-text-main)' }}>Meeting Overview & Agenda</div>
+                  
+                  <div style={{ backgroundColor: '#F8FAFC', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div>
+                      <span style={{ fontSize: '11px', fontWeight: '600', color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Meeting Type</span>
+                      <div style={{ fontSize: '13px', fontWeight: '500', color: 'var(--color-text-main)', marginTop: '2px' }}>On-Site Client Presentation</div>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: '11px', fontWeight: '600', color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Summary of Discussion</span>
+                      <div style={{ fontSize: '13px', color: 'var(--color-text-main)', marginTop: '4px', lineHeight: '1.5' }}>
+                        {selectedActivity.desc}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--color-text-main)' }}>Action Items Checklist:</span>
+                    <div style={{ backgroundColor: '#F8FAFC', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', padding: '14px', fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div className="checklist-item">
+                        <CheckCircle2 size={14} style={{ color: '#10B981' }} />
+                        <span>Delivered enterprise architectural diagram walkthrough.</span>
+                      </div>
+                      <div className="checklist-item">
+                        <CheckCircle2 size={14} style={{ color: '#10B981' }} />
+                        <span>Addressed data localization and security compliance queries.</span>
+                      </div>
+                      <div className="checklist-item">
+                        <Clock size={14} style={{ color: '#F59E0B' }} />
+                        <span>SLA proposal to be shared by Sarah Jenkins next week.</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '8px' }}>
+                    <button className="btn-secondary" style={{ padding: '8px 16px', fontSize: '13px' }} onClick={() => alert('Calendar event logged!')}>View in Calendar</button>
+                    <button className="btn-primary" style={{ padding: '8px 16px', fontSize: '13px' }} onClick={() => alert('Thank you note sent to client!')}>Send Thank You Note</button>
+                  </div>
+                </div>
+              )}
+
+              {selectedActivity.type === 'LinkedIn' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--color-text-main)' }}>LinkedIn Connect Message</div>
+                  
+                  <div className="email-thread-box">
+                    <div className="email-thread-header" style={{ backgroundColor: '#F0F9FF' }}>
+                      <div style={{ color: '#0369A1', fontWeight: '600' }}>LinkedIn Direct Message Thread</div>
+                      <div><strong>To:</strong> contact@{selectedActivity.lead.toLowerCase().replace(' ', '')}.com</div>
+                    </div>
+                    <div className="email-thread-body" style={{ fontStyle: 'italic', color: '#334155' }}>
+                      "Hi Team, I saw your recent updates. I'd love to connect and share how PMRG has helped similar firms in your industry automate key pipelines."
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '8px' }}>
+                    <button className="btn-primary" style={{ padding: '8px 16px', fontSize: '13px', backgroundColor: '#0077B5', border: 'none' }} onClick={() => window.open('https://linkedin.com', '_blank')}>
+                      Open LinkedIn Profile
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {selectedActivity.type === 'Proposal Sent' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--color-text-main)' }}>Proposal Details</div>
+                  
+                  <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', padding: '16px', backgroundColor: '#F8FAFC' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                      <span style={{ fontWeight: '700', fontSize: '14px', color: 'var(--color-text-main)' }}>PMRG Enterprise Proposal v1.4</span>
+                      <span style={{ backgroundColor: '#D1FAE5', color: '#065F46', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: '600' }}>Pending Approval</span>
+                    </div>
+                    <div style={{ fontSize: '13px', color: 'var(--color-text-muted)', lineHeight: '1.5' }}>
+                      {selectedActivity.desc}
+                    </div>
+                  </div>
+
+                  <div className="email-attachments">
+                    <Paperclip size={14} />
+                    <span>Attached Document:</span>
+                    <div className="attachment-chip">
+                      <FileText size={14} style={{ color: '#059669' }} />
+                      <span>Commercial_Proposal_{selectedActivity.lead.replace(' ', '_')}.pdf (2.4 MB)</span>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '8px' }}>
+                    <button className="btn-secondary" style={{ padding: '8px 16px', fontSize: '13px' }} onClick={() => alert('SLA document generated!')}>Edit Document</button>
+                    <button className="btn-primary" style={{ padding: '8px 16px', fontSize: '13px' }} onClick={() => alert('Proposal approved and status updated!')}>Mark as Approved</button>
+                  </div>
+                </div>
+              )}
+
+              {!['Email', 'Call', 'Demo', 'Meeting', 'LinkedIn', 'Proposal Sent'].includes(selectedActivity.type) && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--color-text-main)' }}>Activity Log Entry Details</div>
+                  
+                  <div style={{ backgroundColor: '#F8FAFC', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', padding: '16px', fontSize: '13px', lineHeight: '1.6', color: 'var(--color-text-main)' }}>
+                    {selectedActivity.desc}
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '8px' }}>
+                    <button className="btn-primary" style={{ padding: '8px 16px', fontSize: '13px' }} onClick={() => alert('Task generated successfully!')}>Convert to Task</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Activity Drill-down Modal */}
+      {activeActivityModal && (
+        <div style={{ 
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
+          backgroundColor: 'rgba(15, 23, 42, 0.5)', backdropFilter: 'blur(4px)', 
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 
+        }}>
+          <div style={{ 
+            backgroundColor: 'var(--color-surface)', padding: '24px', 
+            borderRadius: 'var(--radius-lg)', width: '90%', maxWidth: '1200px',
+            maxHeight: '90vh', overflowY: 'auto', boxShadow: 'var(--shadow-lg)',
+            display: 'flex', flexDirection: 'column', gap: '20px'
+          }}>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--color-border)', paddingBottom: '12px' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: 'bold', margin: 0, display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-text-main)' }}>
+                <Sparkles size={20} style={{ color: 'var(--color-primary)' }} />
+                AI Productivity Assistant: {activeActivityModal.title} ({activeActivityModal.list.length} Items)
+              </h3>
+              <button onClick={() => setActiveActivityModal(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted)' }}><X size={20} /></button>
+            </div>
+
+            {/* Filters Bar */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', backgroundColor: 'var(--color-background)', padding: '12px', borderRadius: 'var(--radius-md)' }}>
+              {/* Search */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '11px', fontWeight: '600', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Search Activities</label>
+                <input 
+                  type="text" 
+                  value={actSearch} 
+                  onChange={(e) => { setActSearch(e.target.value); setActPage(1); }} 
+                  placeholder="Company, description..." 
+                  style={{ padding: '8px 12px', fontSize: '13px', borderRadius: '4px', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-surface)', color: 'var(--color-text-main)' }}
+                />
+              </div>
+
+              {/* Owner Filter */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '11px', fontWeight: '600', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Filter by Owner</label>
+                <select 
+                  value={actOwnerFilter} 
+                  onChange={(e) => { setActOwnerFilter(e.target.value); setActPage(1); }}
+                  style={{ padding: '8px 12px', fontSize: '13px', borderRadius: '4px', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-surface)', color: 'var(--color-text-main)' }}
+                >
+                  <option value="">All Owners</option>
+                  <option value="D. Ghosh">D. Ghosh</option>
+                  <option value="S. Mishra">S. Mishra</option>
+                  <option value="H. Kumar">H. Kumar</option>
+                  <option value="P. Sharma">P. Sharma</option>
+                  <option value="R. Nair">R. Nair</option>
+                </select>
+              </div>
+
+              {/* Priority Filter */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '11px', fontWeight: '600', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Filter by Priority</label>
+                <select 
+                  value={actPriorityFilter} 
+                  onChange={(e) => { setActPriorityFilter(e.target.value); setActPage(1); }}
+                  style={{ padding: '8px 12px', fontSize: '13px', borderRadius: '4px', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-surface)', color: 'var(--color-text-main)' }}
+                >
+                  <option value="">All Priorities</option>
+                  <option value="Low">Low</option>
+                  <option value="Medium">Medium</option>
+                  <option value="High">High</option>
+                  <option value="Urgent">Urgent</option>
+                </select>
+              </div>
+
+              {/* Type Filter */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '11px', fontWeight: '600', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Filter by Type</label>
+                <select 
+                  value={actTypeFilter} 
+                  onChange={(e) => { setActTypeFilter(e.target.value); setActPage(1); }}
+                  style={{ padding: '8px 12px', fontSize: '13px', borderRadius: '4px', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-surface)', color: 'var(--color-text-main)' }}
+                >
+                  <option value="">All Types</option>
+                  <option value="Call">Call</option>
+                  <option value="Email">Email</option>
+                  <option value="Meeting">Meeting</option>
+                  <option value="Demo">Demo</option>
+                  <option value="Proposal Sent">Proposal Sent</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Table */}
+            <div className="table-wrapper" style={{ overflowX: 'auto', maxHeight: '400px' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  {activeActivityModal.title === 'Overdue Tasks' ? (
+                    <tr>
+                      <th>Activity ID</th>
+                      <th>Lead ID</th>
+                      <th>Company Name</th>
+                      <th>Activity Type</th>
+                      <th>Assigned Owner</th>
+                      <th>Due Date</th>
+                      <th>Overdue By</th>
+                      <th>Priority</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </tr>
+                  ) : (
+                    <tr>
+                      <th>Activity ID</th>
+                      <th>Lead ID</th>
+                      <th>Company Name</th>
+                      <th>Activity Type</th>
+                      <th>Assigned Owner</th>
+                      <th>Scheduled Date</th>
+                      <th>Scheduled Time</th>
+                      <th>Priority</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </tr>
+                  )}
+                </thead>
+                <tbody>
+                  {getFilteredModalActivities().slice((actPage - 1) * actItemsPerPage, actPage * actItemsPerPage).map(a => {
+                    const isOverdueView = activeActivityModal.title === 'Overdue Tasks';
+                    return (
+                      <tr key={a.actId} style={{ cursor: 'pointer' }} onClick={() => navigate('/leads', { state: { selectedLeadId: a.leadRaw.id } })}>
+                        <td style={{ color: 'var(--color-primary)', fontWeight: 'bold' }}>{a.actId}</td>
+                        <td style={{ color: 'var(--color-text-muted)', fontWeight: 'bold' }}>{a.leadId}</td>
+                        <td style={{ fontWeight: '500' }}>{a.company}</td>
+                        <td>{a.type}</td>
+                        <td>{a.owner}</td>
+                        {isOverdueView ? (
+                          <>
+                            <td>{a.dueDate}</td>
+                            <td>
+                              {a.diffDays <= 1 && <span style={{ backgroundColor: '#FEF3C7', color: '#D97706', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>1 Day</span>}
+                              {a.diffDays === 2 && <span style={{ backgroundColor: '#FFEDD5', color: '#EA580C', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>2 Days</span>}
+                              {a.diffDays > 2 && a.diffDays <= 5 && <span style={{ backgroundColor: '#FEE2E2', color: '#DC2626', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>{a.diffDays} Days</span>}
+                              {a.diffDays > 5 && <span style={{ backgroundColor: '#FEE2E2', color: '#991B1B', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>7+ Days</span>}
+                            </td>
+                          </>
+                        ) : (
+                          <>
+                            <td>
+                              <span className={`badge ${a.scheduledDate === 'Today' ? 'badge-danger' : a.scheduledDate === 'Tomorrow' ? 'badge-warning' : 'badge-info'}`}>
+                                {a.scheduledDate}
+                              </span>
+                            </td>
+                            <td>{a.scheduledTime}</td>
+                          </>
+                        )}
+                        <td><span className="badge badge-info">{a.priority}</span></td>
+                        <td><span className="badge badge-success">{a.status}</span></td>
+                        <td>
+                          <button 
+                            className="btn-secondary" 
+                            style={{ padding: '2px 8px', fontSize: '12px' }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate('/leads', { state: { selectedLeadId: a.leadRaw.id } });
+                            }}
+                          >
+                            Open Profile
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {getFilteredModalActivities().length === 0 && (
+                    <tr>
+                      <td colSpan="10" style={{ textAlign: 'center', padding: '24px', color: 'var(--color-text-muted)' }}>No activities found.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination */}
+            {getFilteredModalActivities().length > actItemsPerPage && (
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}>
+                <button 
+                  disabled={actPage === 1} 
+                  className="btn-secondary" 
+                  style={{ padding: '4px 10px', fontSize: '13px' }}
+                  onClick={() => setActPage(prev => Math.max(prev - 1, 1))}
+                >
+                  Previous
+                </button>
+                <span style={{ fontSize: '13px' }}>Page {actPage} of {Math.ceil(getFilteredModalActivities().length / actItemsPerPage)}</span>
+                <button 
+                  disabled={actPage >= Math.ceil(getFilteredModalActivities().length / actItemsPerPage)} 
+                  className="btn-secondary" 
+                  style={{ padding: '4px 10px', fontSize: '13px' }}
+                  onClick={() => setActPage(prev => prev + 1)}
+                >
+                  Next
+                </button>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid var(--color-border)', paddingTop: '12px' }}>
+              <button className="btn-secondary" onClick={() => setActiveActivityModal(null)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
