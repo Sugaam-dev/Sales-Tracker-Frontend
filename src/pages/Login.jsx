@@ -1,22 +1,79 @@
 import React, { useState } from 'react';
-import { Eye, EyeOff, LogIn } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { login } from '../services/authService';
 import './Login.css';
 
 export default function Login({ onLogin }) {
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const navigate = useNavigate();
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    const email = e.target[0].value;
-    const password = e.target[1].value;
+    setError('');
     
-    if (email === 'demo@salestracker.com' && password === 'password123') {
-      onLogin({ id: 1, name: 'Demo User', role: 'Sales Executive', initials: 'DU' });
-      navigate('/dashboard');
-    } else {
-      alert('Invalid credentials. Use demo@salestracker.com / password123');
+    const email = e.target.elements.email.value;
+    const password = e.target.elements.password.value;
+
+    if (!email || !password) {
+      setError('Please enter both email and password.');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await login(email, password);
+
+      if (response.requires_onboarding) {
+        setError('First-time login. Onboarding is required. Please contact your administrator.');
+        setLoading(false);
+        return;
+      }
+
+      if (response.mfa_required) {
+        setError('Multi-Factor Authentication (MFA) is required. Please contact your administrator.');
+        setLoading(false);
+        return;
+      }
+
+      if (response.access_token && response.user) {
+        // Store tokens in localStorage
+        localStorage.setItem('token', response.access_token);
+        if (response.refresh_token) {
+          localStorage.setItem('refresh_token', response.refresh_token);
+        }
+
+        // Derive user display details
+        const emailParts = response.user.email.split('@')[0].split(/[._-]/);
+        const derivedName = emailParts.map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
+        const derivedInitials = emailParts.map(part => part.charAt(0).toUpperCase()).join('').slice(0, 2);
+
+        const roleMap = {
+          admin: 'Admin',
+          manager: 'Sales Manager',
+          agent: 'Sales Executive',
+        };
+        const displayRole = roleMap[response.user.role] || response.user.role;
+
+        onLogin({
+          id: response.user.id,
+          name: derivedName,
+          role: displayRole,
+          initials: derivedInitials || 'U',
+          email: response.user.email,
+        });
+
+        navigate('/dashboard');
+      } else {
+        setError('Invalid server response. Please try again.');
+      }
+    } catch (err) {
+      setError(err.message || 'Login failed. Please check your credentials.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -31,35 +88,63 @@ export default function Login({ onLogin }) {
           <p>Please enter your details to sign in.</p>
         </div>
 
+        {error && (
+          <div
+            className="error-message"
+            style={{
+              color: '#EF4444',
+              backgroundColor: 'rgba(239, 68, 68, 0.1)',
+              padding: '10px',
+              borderRadius: '6px',
+              marginBottom: '16px',
+              fontSize: '14px',
+              textAlign: 'center',
+              border: '1px solid rgba(239, 68, 68, 0.2)',
+            }}
+          >
+            {error}
+          </div>
+        )}
+
         <form onSubmit={handleLogin} className="login-form">
           <div className="form-group">
             <label>Email address</label>
-            <input type="email" placeholder="name@company.com" defaultValue="demo@salestracker.com" />
+            <input
+              name="email"
+              type="email"
+              placeholder="name@company.com"
+              defaultValue="manager@pmrgsolution.com"
+              disabled={loading}
+              required
+            />
           </div>
 
           <div className="form-group relative">
             <label>Password</label>
             <div className="password-input-wrapper">
-              <input 
-                type={showPassword ? "text" : "password"} 
-                placeholder="••••••••" 
-                defaultValue="password123"
+              <input
+                name="password"
+                type={showPassword ? "text" : "password"}
+                placeholder="••••••••"
+                defaultValue="Welcome@123"
+                disabled={loading}
+                required
               />
-              <button 
-                type="button" 
-                className="toggle-password" 
+              <button
+                type="button"
+                className="toggle-password"
                 onClick={() => setShowPassword(!showPassword)}
+                disabled={loading}
               >
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
           </div>
 
-          <button type="submit" className="btn-primary login-btn">
-            Sign In
+          <button type="submit" className="btn-primary login-btn" disabled={loading}>
+            {loading ? 'Signing In...' : 'Sign In'}
           </button>
         </form>
-
       </div>
     </div>
   );

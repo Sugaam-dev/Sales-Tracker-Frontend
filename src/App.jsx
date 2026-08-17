@@ -15,6 +15,12 @@ import Layout from './components/Layout';
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
 
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('refresh_token');
+    setCurrentUser(null);
+  };
+
   return (
     <Router>
       <Routes>
@@ -24,7 +30,7 @@ function App() {
         />
         
         {/* Protected Routes wrapper (mocked for prototype) */}
-        <Route element={currentUser ? <Layout user={currentUser} onLogout={() => setCurrentUser(null)} /> : <Navigate to="/login" replace />}>
+        <Route element={currentUser ? <Layout user={currentUser} onLogout={handleLogout} /> : <Navigate to="/login" replace />}>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/leads" element={<Leads />} />
