@@ -139,12 +139,12 @@ function MasterDataSettings() {
 
   return (
     <div>
-      <div className="pane-header" style={{ marginBottom: '16px' }}>
-        <h3>Dropdown Settings</h3>
-        <p style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>Manage dropdown values used across the app</p>
-      </div>
+      {/* <div className="pane-header" style={{ marginBottom: '16px' }}> */}
+        {/* <h3>Dropdown Settings</h3> */}
+        {/* <p style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>Manage dropdown values used across the app</p> */}
+      {/* </div> */}
 
-      {masterDataConfigs.map(({ type, title, items, detail }) => (
+      {/* {masterDataConfigs.map(({ type, title, items, detail }) => (
         <MasterDataSection
           key={type}
           title={title}
@@ -159,7 +159,7 @@ function MasterDataSettings() {
             </div>
           )}
         />
-      ))}
+      ))} */}
 
       {modal && (
         <ModalWrapper title={`${modal.mode === 'add' ? 'Add' : 'Edit'} ${modal.type}`} onClose={() => setModal(null)}>
@@ -236,7 +236,7 @@ export default function Admin() {
 
   const tabs = [
     { id: 'users', label: 'User Management', Icon: Users },
-    { id: 'settings', label: 'Dropdown Settings', Icon: Settings },
+    // { id: 'settings', label: 'Dropdown Settings', Icon: Settings },
     { id: 'email', label: 'Email Automation', Icon: Mail }
   ];
 
