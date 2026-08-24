@@ -3,6 +3,14 @@ const BASE_URL =
 
 export const API = {
   LOGIN: `${BASE_URL}/auth/login`,
+  REFRESH: `${BASE_URL}/auth/refresh`,
+  SSO_REDIRECT: `${BASE_URL}/auth/sso/redirect`,
+  ONBOARDING_SET_PASSWORD: `${BASE_URL}/auth/onboarding/set-password`,
+  ONBOARDING_VERIFY_EMAIL: `${BASE_URL}/auth/onboarding/verify-email`,
+  ONBOARDING_VERIFY_MOBILE: `${BASE_URL}/auth/onboarding/verify-mobile`,
+  FORGOT_PASSWORD: `${BASE_URL}/auth/forgot-password`,
+  RESET_PASSWORD: `${BASE_URL}/auth/reset-password`,
+  MFA_VERIFY: `${BASE_URL}/auth/mfa/verify`,
   USERS: `${BASE_URL}/users/`,
   MASTER_STAGES: `${BASE_URL}/master/stages`,
   MASTER_PRIORITIES: `${BASE_URL}/master/priorities`,
@@ -10,7 +18,6 @@ export const API = {
   MASTER_REGIONS: `${BASE_URL}/master/regions`,
   MASTER_ACTIVITY_TYPES: `${BASE_URL}/master/activity-types`,
   SEND_EMAIL: `${BASE_URL}/email/send`,
-  SSO_REDIRECT: `${BASE_URL}/auth/sso/redirect`,
 };
 
 export const authHeaders = () => {
