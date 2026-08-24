@@ -10,14 +10,19 @@ import Reports from './pages/Reports';
 import Admin from './pages/Admin';
 import Import from './pages/Import';
 import CommercialEstimation from './pages/CommercialEstimation';
+import SSOSuccess from './pages/SSOSuccess';
 import Layout from './components/Layout';
 
 function App() {
-  const [currentUser, setCurrentUser] = useState(null);
+  const [currentUser, setCurrentUser] = useState(() => {
+    const savedUser = localStorage.getItem('user');
+    return savedUser ? JSON.parse(savedUser) : null;
+  });
 
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('refresh_token');
+    localStorage.removeItem('user');
     setCurrentUser(null);
   };
 
@@ -26,7 +31,11 @@ function App() {
       <Routes>
         <Route 
           path="/login" 
-          element={<Login onLogin={(user) => setCurrentUser(user)} />} 
+          element={<Login onLogin={setCurrentUser} />} 
+        />
+        <Route 
+          path="/sso-success" 
+          element={<SSOSuccess onLogin={setCurrentUser} />} 
         />
         
         {/* Protected Routes wrapper (mocked for prototype) */}

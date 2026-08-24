@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { login } from '../services/authService';
+import { API } from '../api/config';
 import './Login.css';
 
 export default function Login({ onLogin }) {
@@ -9,6 +10,10 @@ export default function Login({ onLogin }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+
+  const handleMicrosoftSSO = () => {
+    window.location.href = API.SSO_REDIRECT || 'http://localhost:8080/api/v1/auth/sso/redirect';
+  };
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -58,13 +63,16 @@ export default function Login({ onLogin }) {
         };
         const displayRole = roleMap[response.user.role] || response.user.role;
 
-        onLogin({
+        const userObj = {
           id: response.user.id,
           name: derivedName,
           role: displayRole,
           initials: derivedInitials || 'U',
           email: response.user.email,
-        });
+        };
+
+        localStorage.setItem('user', JSON.stringify(userObj));
+        onLogin(userObj);
 
         navigate('/dashboard');
       } else {
@@ -145,6 +153,25 @@ export default function Login({ onLogin }) {
             {loading ? 'Signing In...' : 'Sign In'}
           </button>
         </form>
+
+        <div className="divider">
+          <span>OR</span>
+        </div>
+
+        <button
+          type="button"
+          className="btn-sso-microsoft"
+          onClick={handleMicrosoftSSO}
+          disabled={loading}
+        >
+          <svg className="sso-icon" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg">
+            <path fill="#f25022" d="M1 1h9v9H1z"/>
+            <path fill="#00a4ef" d="M1 11h9v9H1z"/>
+            <path fill="#7fba00" d="M11 1h9v9H11z"/>
+            <path fill="#ffb900" d="M11 11h9v9H11z"/>
+          </svg>
+          Sign in with Microsoft
+        </button>
       </div>
     </div>
   );

@@ -10,6 +10,7 @@ export const API = {
   MASTER_REGIONS: `${BASE_URL}/master/regions`,
   MASTER_ACTIVITY_TYPES: `${BASE_URL}/master/activity-types`,
   SEND_EMAIL: `${BASE_URL}/email/send`,
+  SSO_REDIRECT: `${BASE_URL}/auth/sso/redirect`,
 };
 
 export const authHeaders = () => {
