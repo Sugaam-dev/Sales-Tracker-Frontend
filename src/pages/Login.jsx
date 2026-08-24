@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
-import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { login, storeSession, deriveUser } from '../services/authService';
+import { useNavigate } from 'react-router-dom';
+import { login } from '../services/authService';
 import { API } from '../api/config';
 import './Login.css';
 
@@ -10,8 +10,6 @@ export default function Login({ onLogin }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
-  const location = useLocation();
-  const notice = location.state?.notice;
 
   const handleMicrosoftSSO = () => {
     window.location.href = API.SSO_REDIRECT || 'http://localhost:8080/api/v1/auth/sso/redirect';
@@ -20,7 +18,7 @@ export default function Login({ onLogin }) {
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
-
+    
     const email = e.target.elements.email.value;
     const password = e.target.elements.password.value;
 
@@ -35,18 +33,47 @@ export default function Login({ onLogin }) {
       const response = await login(email, password);
 
       if (response.requires_onboarding) {
-        navigate('/onboarding', { state: { tempToken: response.temp_token } });
+        setError('First-time login. Onboarding is required. Please contact your administrator.');
+        setLoading(false);
         return;
       }
 
       if (response.mfa_required) {
-        navigate('/mfa-verify', { state: { mfaPendingToken: response.mfa_pending_token } });
+        setError('Multi-Factor Authentication (MFA) is required. Please contact your administrator.');
+        setLoading(false);
         return;
       }
 
       if (response.access_token && response.user) {
-        storeSession(response);
-        onLogin(deriveUser(response.user));
+        // Store tokens in localStorage
+        localStorage.setItem('token', response.access_token);
+        if (response.refresh_token) {
+          localStorage.setItem('refresh_token', response.refresh_token);
+        }
+
+        // Derive user display details
+        const emailParts = response.user.email.split('@')[0].split(/[._-]/);
+        const derivedName = emailParts.map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
+        const derivedInitials = emailParts.map(part => part.charAt(0).toUpperCase()).join('').slice(0, 2);
+
+        const roleMap = {
+          admin: 'Admin',
+          manager: 'Sales Manager',
+          agent: 'Sales Executive',
+        };
+        const displayRole = roleMap[response.user.role] || response.user.role;
+
+        const userObj = {
+          id: response.user.id,
+          name: derivedName,
+          role: displayRole,
+          initials: derivedInitials || 'U',
+          email: response.user.email,
+        };
+
+        localStorage.setItem('user', JSON.stringify(userObj));
+        onLogin(userObj);
+
         navigate('/dashboard');
       } else {
         setError('Invalid server response. Please try again.');
@@ -69,23 +96,6 @@ export default function Login({ onLogin }) {
           <p>Please enter your details to sign in.</p>
         </div>
 
-        {notice && !error && (
-          <div
-            style={{
-              color: '#10B981',
-              backgroundColor: 'rgba(16, 185, 129, 0.1)',
-              padding: '10px',
-              borderRadius: '6px',
-              marginBottom: '16px',
-              fontSize: '14px',
-              textAlign: 'center',
-              border: '1px solid rgba(16, 185, 129, 0.2)',
-            }}
-          >
-            {notice}
-          </div>
-        )}
-
         {error && (
           <div
             className="error-message"
@@ -106,28 +116,25 @@ export default function Login({ onLogin }) {
 
         <form onSubmit={handleLogin} className="login-form">
           <div className="form-group">
-            <label>Email</label>
+            <label>Email address</label>
             <input
               name="email"
               type="email"
               placeholder="name@company.com"
+              defaultValue="manager@pmrgsolution.com"
               disabled={loading}
               required
             />
           </div>
 
           <div className="form-group relative">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-              <label>Password</label>
-              <Link to="/forgot-password" style={{ fontSize: '0.8125rem', fontWeight: 500 }}>
-                Forgot password?
-              </Link>
-            </div>
+            <label>Password</label>
             <div className="password-input-wrapper">
               <input
                 name="password"
-                type={showPassword ? 'text' : 'password'}
+                type={showPassword ? "text" : "password"}
                 placeholder="••••••••"
+                defaultValue="Welcome@123"
                 disabled={loading}
                 required
               />
