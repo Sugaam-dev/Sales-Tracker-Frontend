@@ -3,10 +3,6 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 
 // We'll create these files shortly
 import Login from './pages/Login';
-import Onboarding from './pages/Onboarding';
-import MfaVerify from './pages/MfaVerify';
-import ForgotPassword from './pages/ForgotPassword';
-import ResetPassword from './pages/ResetPassword';
 import Dashboard from './pages/Dashboard';
 import Leads from './pages/Leads';
 import Activities from './pages/Activities';
@@ -41,16 +37,6 @@ function App() {
           path="/sso-success" 
           element={<SSOSuccess onLogin={setCurrentUser} />} 
         />
-        <Route
-          path="/onboarding"
-          element={<Onboarding onLogin={setCurrentUser} />}
-        />
-        <Route
-          path="/mfa-verify"
-          element={<MfaVerify onLogin={setCurrentUser} />}
-        />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
         
         {/* Protected Routes wrapper (mocked for prototype) */}
         <Route element={currentUser ? <Layout user={currentUser} onLogout={handleLogout} /> : <Navigate to="/login" replace />}>
