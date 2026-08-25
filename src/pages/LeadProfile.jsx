@@ -171,7 +171,7 @@ function PhoneInput({ label, required, value, onChange, countryCode, onCountryCo
   );
 }
 
-export default function LeadProfile({ lead, onSave, onCancel, isEditing }) {
+export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersList = [], stagesList = [] }) {
   const isExistingLead = !!lead;
   const [isEditMode, setIsEditMode] = useState(isEditing || !isExistingLead);
   const fileInputRef = useRef(null);
@@ -433,6 +433,7 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing }) {
       partners,
       owner,
       officePhone,
+      officePhoneCountry,
       criteria: {
         ...lead?.criteria,
         bestTime
@@ -698,11 +699,19 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing }) {
               <label>Lead Owner <span style={{ color: 'var(--color-danger)' }}>*</span></label>
               <select value={owner} onChange={(e) => { setOwner(e.target.value); setOwnerError(''); }}>
                 <option value="select">Select Owner</option>
-                <option value="D. Ghosh">D. Ghosh</option>
-                <option value="S. Mishra">S. Mishra</option>
-                <option value="H. Kumar">H. Kumar</option>
-                <option value="P. Sharma">P. Sharma</option>
-                <option value="R. Nair">R. Nair</option>
+                {usersList && usersList.length > 0 ? (
+                  usersList.map(user => (
+                    <option key={user.id} value={user.name}>{user.name}</option>
+                  ))
+                ) : (
+                  <>
+                    <option value="D. Ghosh">D. Ghosh</option>
+                    <option value="S. Mishra">S. Mishra</option>
+                    <option value="H. Kumar">H. Kumar</option>
+                    <option value="P. Sharma">P. Sharma</option>
+                    <option value="R. Nair">R. Nair</option>
+                  </>
+                )}
               </select>
               {ownerError && <p style={{ margin: '4px 0 0', fontSize: '11px', color: 'var(--color-danger)' }}>{ownerError}</p>}
             </div>
@@ -750,9 +759,15 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing }) {
               <label>Stage <span style={{ color: 'var(--color-danger)' }}>*</span></label>
               <select value={stage} onChange={(e) => { setStage(e.target.value); setStageError(''); }}>
                 <option value="select">Select Stage</option>
-                {pipelineType && LIFECYCLE_PIPELINES[pipelineType] && LIFECYCLE_PIPELINES[pipelineType].stages.map(stg => (
-                  <option key={stg} value={stg}>{stg}</option>
-                ))}
+                {stagesList && stagesList.length > 0 ? (
+                  stagesList.map(stg => (
+                    <option key={stg.id} value={stg.name}>{stg.name}</option>
+                  ))
+                ) : (
+                  pipelineType && LIFECYCLE_PIPELINES[pipelineType] && LIFECYCLE_PIPELINES[pipelineType].stages.map(stg => (
+                    <option key={stg} value={stg}>{stg}</option>
+                  ))
+                )}
               </select>
               {stageError && <p style={{ margin: '4px 0 0', fontSize: '11px', color: 'var(--color-danger)' }}>{stageError}</p>}
             </div>

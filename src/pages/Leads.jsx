@@ -1,20 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import LeadProfile, { LIFECYCLE_PIPELINES } from './LeadProfile';
-import { X, Edit2, Trash2, Phone, Mail, Calendar, Download, Plus, MoreVertical, Sparkles, Calculator } from 'lucide-react';
+import { X, Edit2, Trash2, Phone, Mail, Calendar, Download, Plus, MoreVertical, Sparkles, Calculator, RotateCcw } from 'lucide-react';
+import { fetchCurrentUsers, fetchMasterStages, fetchLeads, fetchLeadById } from '../services/leadService';
 import './Leads.css';
 
 import { initialLeadsData } from './mockLeads';
 export { initialLeadsData };
 
 export default function Leads() {
+  const { id: urlLeadId } = useParams();
+  const navigate = useNavigate();
+  const location = useLocation();
+
   const [selectedLead, setSelectedLead] = useState(null);
   const [isCreatingLead, setIsCreatingLead] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
   const [currentPage, setCurrentPage] = useState(1);
-  const leadsPerPage = 10;
-  const navigate = useNavigate();
+  const [leadsPerPage, setLeadsPerPage] = useState(5);
   const [classificationLead, setClassificationLead] = useState(null);
   const [classStatus, setClassStatus] = useState('New');
   const [classStage, setClassStage] = useState('Qualification');
@@ -33,7 +37,116 @@ export default function Leads() {
   const [breakdownPage, setBreakdownPage] = useState(1);
   const itemsPerPage = 5;
 
-  const handleOpenBreakdown = (title, leadsList) => {
+  const [leads, setLeads] = useState([]);
+  const [isEditing, setIsEditing] = useState(false);
+  const [openMenuId, setOpenMenuId] = useState(null);
+
+  // API Integration states
+  const [usersList, setUsersList] = useState([]);
+  const [stagesList, setStagesList] = useState([]);
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [ownerFilter, setOwnerFilter] = useState('');
+  const [stageFilter, setStageFilter] = useState('');
+  const [priorityFilter, setPriorityFilter] = useState('');
+  const [sortBy, setSortBy] = useState('createdAt');
+  const [sortOrder, setSortOrder] = useState('desc');
+  const [leadsLoading, setLeadsLoading] = useState(false);
+  const [leadsError, setLeadsError] = useState('');
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 5,
+    total: 0,
+    totalPages: 0,
+  });
+
+  // Fetch dropdown data on mount
+  useEffect(() => {
+    const loadDropdownData = async () => {
+      try {
+        const [usersRes, stagesRes] = await Promise.all([
+          fetchCurrentUsers(),
+          fetchMasterStages()
+        ]);
+        if (usersRes.success) setUsersList(usersRes.data || []);
+        if (stagesRes.success) setStagesList(stagesRes.data || []);
+      } catch (err) {
+        console.error('Failed to load filter dropdown lists:', err);
+      }
+    };
+    loadDropdownData();
+  }, []);
+
+  // Debounce search input
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(search);
+      setCurrentPage(1);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [search]);
+
+  // Load leads when query states change
+  useEffect(() => {
+    const loadLeadsData = async () => {
+      setLeadsLoading(true);
+      setLeadsError('');
+      try {
+        const response = await fetchLeads({
+          page: currentPage,
+          limit: leadsPerPage,
+          search: debouncedSearch,
+          owner: ownerFilter,
+          stage: stageFilter,
+          priority: priorityFilter,
+          sortBy,
+          sortOrder,
+        });
+        if (response.success) {
+          setLeads(response.data || []);
+          if (response.pagination) {
+            setPagination(response.pagination);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch leads:', err);
+        if (err.message.includes('400')) {
+          setLeadsError('Invalid filter or search parameters.');
+        } else {
+          setLeadsError('Something went wrong. Please try again.');
+        }
+      } finally {
+        setLeadsLoading(false);
+      }
+    };
+    loadLeadsData();
+  }, [currentPage, leadsPerPage, debouncedSearch, ownerFilter, stageFilter, priorityFilter, sortBy, sortOrder]);
+
+  // Load specific lead detail if ID parameter in URL
+  useEffect(() => {
+    if (urlLeadId) {
+      const getLead = async () => {
+        setLeadsLoading(true);
+        setLeadsError('');
+        try {
+          const response = await fetchLeadById(urlLeadId);
+          if (response.success && response.data) {
+            setSelectedLead(response.data);
+          } else {
+            setLeadsError('Lead not found.');
+          }
+        } catch (err) {
+          console.error('Failed to fetch lead by id:', err);
+          setLeadsError('Lead not found.');
+        } finally {
+          setLeadsLoading(false);
+        }
+      };
+      getLead();
+    } else {
+      setSelectedLead(null);
+    }
+  }, [urlLeadId]);  const handleOpenBreakdown = (title, leadsList) => {
     setBreakdownModal({ title, leads: leadsList });
     setBreakdownSearch('');
     setBreakdownOwnerFilter('');
@@ -43,13 +156,6 @@ export default function Leads() {
     setBreakdownSortOrder('asc');
     setBreakdownPage(1);
   };
-
-  // Sort latest created first
-  const [leads, setLeads] = useState([...initialLeadsData].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
-  const location = useLocation();
-  const [isEditing, setIsEditing] = useState(false);
-  const [openMenuId, setOpenMenuId] = useState(null);
-
   useEffect(() => {
     const handleOutsideClick = () => setOpenMenuId(null);
     window.addEventListener('click', handleOutsideClick);
@@ -203,10 +309,25 @@ export default function Leads() {
     return status === 'Open' ? 'badge-success' : 'badge-warning';
   };
 
-  const indexOfLastLead = currentPage * leadsPerPage;
-  const indexOfFirstLead = indexOfLastLead - leadsPerPage;
-  const currentLeads = leads.slice(indexOfFirstLead, indexOfLastLead);
-  const totalPages = Math.ceil(leads.length / leadsPerPage);
+  const handleSort = (field) => {
+    if (sortBy === field) {
+      setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(field);
+      setSortOrder('desc');
+    }
+  };
+
+  const handleResetFilters = () => {
+    setSearch('');
+    setOwnerFilter('');
+    setStageFilter('');
+    setPriorityFilter('');
+    setCurrentPage(1);
+  };
+
+  const currentLeads = leads;
+  const totalPages = pagination.totalPages;
 
   const handleNextPage = () => {
     if (currentPage < totalPages) setCurrentPage(currentPage + 1);
@@ -299,7 +420,14 @@ export default function Leads() {
           <LeadProfile 
             lead={selectedLead}
             isEditing={isEditing}
-            onCancel={() => { setIsCreatingLead(false); setSelectedLead(null); setIsEditing(false); }}
+            usersList={usersList}
+            stagesList={stagesList}
+            onCancel={() => { 
+              setIsCreatingLead(false); 
+              setSelectedLead(null); 
+              setIsEditing(false); 
+              navigate('/leads');
+            }}
             onSave={(updatedData) => {
               if (selectedLead) {
                 // Edit existing lead
@@ -317,6 +445,7 @@ export default function Leads() {
               setIsCreatingLead(false);
               setSelectedLead(null);
               setIsEditing(false);
+              navigate('/leads');
             }}
           />
         ) : (
@@ -357,42 +486,135 @@ export default function Leads() {
               </div>
             </div>
 
+            {/* Filters Bar */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', backgroundColor: 'var(--color-background)', padding: '16px', borderRadius: 'var(--radius-md)', marginBottom: '16px', border: '1px solid var(--color-border)' }}>
+              {/* Search */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '11px', fontWeight: '600', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Search Leads</label>
+                <input 
+                  type="text" 
+                  value={search} 
+                  onChange={(e) => setSearch(e.target.value)} 
+                  placeholder="ID, company, KAM..." 
+                  style={{ padding: '8px 12px', fontSize: '13px', borderRadius: '4px', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-surface)', color: 'var(--color-text-main)' }}
+                />
+              </div>
+
+              {/* Owner Filter */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '11px', fontWeight: '600', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Owner</label>
+                <select 
+                  value={ownerFilter} 
+                  onChange={(e) => { setOwnerFilter(e.target.value); setCurrentPage(1); }}
+                  style={{ padding: '8px 12px', fontSize: '13px', borderRadius: '4px', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-surface)', color: 'var(--color-text-main)' }}
+                >
+                  <option value="">All Owners</option>
+                  {usersList.map(user => (
+                    <option key={user.id} value={user.name}>{user.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Stage Filter */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '11px', fontWeight: '600', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Stage</label>
+                <select 
+                  value={stageFilter} 
+                  onChange={(e) => { setStageFilter(e.target.value); setCurrentPage(1); }}
+                  style={{ padding: '8px 12px', fontSize: '13px', borderRadius: '4px', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-surface)', color: 'var(--color-text-main)' }}
+                >
+                  <option value="">All Stages</option>
+                  {stagesList.map(stg => (
+                    <option key={stg.id} value={stg.name}>{stg.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Priority Filter */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '11px', fontWeight: '600', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Priority</label>
+                <select 
+                  value={priorityFilter} 
+                  onChange={(e) => { setPriorityFilter(e.target.value); setCurrentPage(1); }}
+                  style={{ padding: '8px 12px', fontSize: '13px', borderRadius: '4px', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-surface)', color: 'var(--color-text-main)' }}
+                >
+                  <option value="">All Priorities</option>
+                  <option value="Low">Low</option>
+                  <option value="Normal">Normal</option>
+                  <option value="High">High</option>
+                  <option value="Urgent">Urgent</option>
+                </select>
+              </div>
+
+              {/* Reset Button */}
+              <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                <button 
+                  onClick={handleResetFilters}
+                  className="btn-secondary"
+                  style={{ width: '100%', padding: '8px 12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '13px', height: '38px' }}
+                >
+                  <RotateCcw size={14} /> Clear Filters
+                </button>
+              </div>
+            </div>
+
             <div className="card leads-table-card" style={{ height: 'calc(100vh - 160px)' }}>
             <div className="table-wrapper">
             <table>
               <thead>
                 <tr>
-                  <th>Lead ID</th>
+                  <th style={{ cursor: 'pointer' }} onClick={() => handleSort('id')}>Lead ID {sortBy === 'id' ? (sortOrder === 'asc' ? ' ▲' : ' ▼') : ''}</th>
                   <th>Company</th>
                   <th>Contact</th>
                   <th>Owner</th>
                   <th>Status</th>
                   <th>Priority</th>
-                  <th>Deal Value</th>
+                  <th style={{ cursor: 'pointer' }} onClick={() => handleSort('value')}>Deal Value {sortBy === 'value' ? (sortOrder === 'asc' ? ' ▲' : ' ▼') : ''}</th>
                   <th>Expected Value</th>
-                  <th>Next Follow-up</th>
+                  <th style={{ cursor: 'pointer' }} onClick={() => handleSort('createdAt')}>Next Follow-up {sortBy === 'createdAt' ? (sortOrder === 'asc' ? ' ▲' : ' ▼') : ''}</th>
                   <th style={{ textAlign: 'center', width: '90px' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {currentLeads.map(lead => (
+                {leadsLoading ? (
+                  <tr>
+                    <td colSpan="10" style={{ textAlign: 'center', padding: '48px' }}>
+                      <div style={{ display: 'inline-block', width: '32px', height: '32px', border: '3px solid #E2E8F0', borderTopColor: '#2563EB', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+                      <p style={{ color: 'var(--color-text-muted)', fontSize: '14px', marginTop: '12px' }}>Loading leads...</p>
+                      <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+                    </td>
+                  </tr>
+                ) : leadsError ? (
+                  <tr>
+                    <td colSpan="10" style={{ textAlign: 'center', padding: '48px', color: 'var(--color-danger)' }}>
+                      <p style={{ fontWeight: '500' }}>{leadsError}</p>
+                    </td>
+                  </tr>
+                ) : currentLeads.length === 0 ? (
+                  <tr>
+                    <td colSpan="10" style={{ textAlign: 'center', padding: '48px', color: 'var(--color-text-muted)' }}>
+                      No leads found.
+                    </td>
+                  </tr>
+                ) : (
+                  currentLeads.map(lead => (
                   <tr
                     key={lead.id}
-                    onClick={() => setSelectedLead(lead)}
+                    onClick={() => navigate(`/leads/${lead.id}`)}
                     className={selectedLead?.id === lead.id ? 'selected-row' : ''}
                     style={{ cursor: 'pointer' }}
                   >
                     {/* Lead ID */}
                     <td 
-                      className="font-medium" 
-                      style={{ 
-                        color: 'var(--color-text-muted)',
-                        borderLeft: lead.isOverdue ? '4px solid var(--color-danger)' : 'none',
-                        paddingLeft: lead.isOverdue ? '12px' : '16px'
-                      }}
+                       className="font-medium" 
+                       style={{ 
+                         color: 'var(--color-text-muted)',
+                         borderLeft: lead.isOverdue ? '4px solid var(--color-danger)' : 'none',
+                         paddingLeft: lead.isOverdue ? '12px' : '16px'
+                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span>L-{lead.id.toString().padStart(4, "0")}</span>
+                        <span>{lead.id.toString().startsWith('L-') ? lead.id : `L-${lead.id.toString().padStart(4, "0")}`}</span>
                         {lead.isOverdue && <span style={{ color: 'var(--color-warning)', fontSize: '13px' }} title="Action Overdue">⚠️</span>}
                       </div>
                     </td>
@@ -550,16 +772,16 @@ export default function Leads() {
                       )}
                     </td>
                   </tr>
-                ))}
+                )))}
               </tbody>
             </table>
           </div>
           
           {/* Pagination Footer */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px', padding: '16px', borderTop: '1px solid var(--color-border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px', padding: '16px', borderTop: '1px solid var(--color-border)', flexWrap: 'wrap' }}>
             <button onClick={handlePrevPage} disabled={currentPage === 1} className="btn-secondary" style={{ padding: '6px 12px', fontSize: '14px', border: 'none', background: 'transparent', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', color: currentPage === 1 ? 'var(--color-text-muted)' : 'var(--color-text-main)' }}>&larr; Previous</button>
             <div style={{ display: 'flex', gap: '4px' }}>
-              {[...Array(totalPages)].map((_, i) => (
+              {[...Array(totalPages || 0)].map((_, i) => (
                 <button 
                   key={i} 
                   onClick={() => setCurrentPage(i + 1)}
@@ -574,9 +796,23 @@ export default function Leads() {
                 </button>
               ))}
             </div>
-            <button onClick={handleNextPage} disabled={currentPage === totalPages} className="btn-secondary" style={{ padding: '6px 12px', fontSize: '14px', border: 'none', background: 'transparent', cursor: currentPage === totalPages ? 'not-allowed' : 'pointer', color: currentPage === totalPages ? 'var(--color-text-muted)' : 'var(--color-text-main)' }}>Next &rarr;</button>
+            <button onClick={handleNextPage} disabled={currentPage === (totalPages || 1)} className="btn-secondary" style={{ padding: '6px 12px', fontSize: '14px', border: 'none', background: 'transparent', cursor: currentPage === (totalPages || 1) ? 'not-allowed' : 'pointer', color: currentPage === (totalPages || 1) ? 'var(--color-text-muted)' : 'var(--color-text-main)' }}>Next &rarr;</button>
+            
+            <select
+              value={leadsPerPage}
+              onChange={(e) => {
+                setLeadsPerPage(parseInt(e.target.value, 10));
+                setCurrentPage(1);
+              }}
+              style={{ padding: '6px 10px', fontSize: '13px', borderRadius: '4px', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-surface)', color: 'var(--color-text-main)' }}
+            >
+              <option value={5}>5 per page</option>
+              <option value={10}>10 per page</option>
+              <option value={20}>20 per page</option>
+            </select>
+
             <span style={{ color: 'var(--color-text-muted)', fontSize: '14px', marginLeft: '16px' }}>
-              Showing {indexOfFirstLead + 1}-{Math.min(indexOfLastLead, leads.length)} of {leads.length} leads
+              Showing {pagination.total === 0 ? 0 : (currentPage - 1) * leadsPerPage + 1}-{Math.min(currentPage * leadsPerPage, pagination.total)} of {pagination.total} leads
             </span>
           </div>
         </div>
