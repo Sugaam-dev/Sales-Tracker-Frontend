@@ -1,4 +1,4 @@
-import { API } from '../api/config';
+import { API, authHeaders } from '../api/config';
 
 async function postJSON(url, body) {
   const response = await fetch(url, {
@@ -84,8 +84,9 @@ export function deriveUser(user) {
 
   const roleMap = {
     admin: 'Admin',
-    manager: 'Sales Manager',
-    agent: 'Sales Executive',
+    sales_manager: 'Sales Manager',
+    sales_executive: 'Sales Executive',
+    leader: 'Leader',
   };
   const displayRole = roleMap[user.role] || user.role;
 
@@ -98,9 +99,129 @@ export function deriveUser(user) {
   };
 }
 
-// Persists tokens (and the derived user, so a page refresh doesn't log the
-// user out) from a successful session response (login, MFA verify, or the
-// end of onboarding) into localStorage.
+export function clearLocalSession() {
+  localStorage.removeItem('token');
+  localStorage.removeItem('refresh_token');
+  localStorage.removeItem('user');
+}
+
+let isRefreshing = false;
+let refreshSubscribers = [];
+
+function subscribeTokenRefresh(cb) {
+  refreshSubscribers.push(cb);
+}
+
+function onRefreshed(token) {
+  refreshSubscribers.forEach((cb) => cb(token));
+  refreshSubscribers = [];
+}
+
+export async function authenticatedFetch(url, options = {}) {
+  let headers = {
+    ...authHeaders(),
+    ...(options.headers || {}),
+  };
+
+  let response = await fetch(url, {
+    ...options,
+    headers,
+  });
+
+  if (response.status === 401) {
+    const refreshTokenVal = localStorage.getItem('refresh_token');
+    if (!refreshTokenVal) {
+      clearLocalSession();
+      window.location.href = '/login';
+      throw new Error('Unauthorized');
+    }
+
+    if (!isRefreshing) {
+      isRefreshing = true;
+      try {
+        const refreshRes = await fetch(API.REFRESH, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ refresh_token: refreshTokenVal }),
+        });
+
+        if (!refreshRes.ok) {
+          throw new Error('Refresh token invalid');
+        }
+
+        const data = await refreshRes.json();
+        if (data.access_token && data.refresh_token) {
+          localStorage.setItem('token', data.access_token);
+          localStorage.setItem('refresh_token', data.refresh_token);
+          isRefreshing = false;
+          onRefreshed(data.access_token);
+        } else {
+          throw new Error('Invalid refresh response');
+        }
+      } catch (err) {
+        isRefreshing = false;
+        refreshSubscribers = [];
+        clearLocalSession();
+        window.location.href = '/login';
+        throw err;
+      }
+    }
+
+    return new Promise((resolve) => {
+      subscribeTokenRefresh((newToken) => {
+        headers['Authorization'] = `Bearer ${newToken}`;
+        resolve(
+          fetch(url, {
+            ...options,
+            headers,
+          })
+        );
+      });
+    });
+  }
+
+  return response;
+}
+
+export async function logout(accessToken, refreshToken) {
+  try {
+    const headers = {
+      'Content-Type': 'application/json',
+    };
+    if (accessToken) {
+      headers['Authorization'] = `Bearer ${accessToken}`;
+    }
+    await fetch(API.LOGOUT, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+  } catch (err) {
+    console.error('Logout request failed:', err);
+  } finally {
+    clearLocalSession();
+  }
+}
+
+export async function createUser(userData) {
+  const response = await authenticatedFetch(API.USERS, {
+    method: 'POST',
+    body: JSON.stringify(userData),
+  });
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to create user.');
+  }
+
+  return data;
+}
+
+// --- Onboarding (first-time login) ---------------------------------------
+
 export function storeSession(response) {
   if (response.access_token) {
     localStorage.setItem('token', response.access_token);
