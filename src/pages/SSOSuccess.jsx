@@ -57,8 +57,9 @@ export default function SSOSuccess({ onLogin }) {
 
       const roleMap = {
         admin: 'Admin',
-        manager: 'Sales Manager',
-        agent: 'Sales Executive',
+        sales_manager: 'Sales Manager',
+        sales_executive: 'Sales Executive',
+        leader: 'Leader',
       };
       const displayRole = roleMap[role] || role;
 
