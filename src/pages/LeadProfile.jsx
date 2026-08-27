@@ -350,18 +350,29 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
     setPartners(partners.filter(p => p !== partnerToRemove));
   };
 
+  const mapStatusToStage = (statusVal) => {
+    if (stagesList && stagesList.length > 0) {
+      const matched = stagesList.find(s => s.status === statusVal);
+      if (matched) return matched.name;
+    }
+    switch(statusVal) {
+      case 'Open': return 'Prospecting';
+      case 'New': return 'Qualification';
+      case 'Contacted': return 'Initial Discussion';
+      case 'Analysis': return 'Needs Analysis';
+      case 'Interested': return 'Proposal';
+      case 'Negotiation': return 'Negotiation';
+      case 'Won': return 'Closed Won';
+      case 'Lost': return 'Closed Lost';
+      default: return 'Prospecting';
+    }
+  };
+
   const handleStatusChange = (e) => {
     const newStatus = e.target.value;
     setStatus(newStatus);
-    switch (newStatus) {
-      case 'New':         setStage('Qualification');    break;
-      case 'Contacted':   setStage('Initial Discussion'); break;
-      case 'Interested':  setStage('Proposal');          break;
-      case 'Negotiation': setStage('Negotiation');       break;
-      case 'Won':         setStage('Closed Won');        break;
-      case 'Lost':        setStage('Closed Lost');       break;
-      default: break;
-    }
+    const mappedStage = mapStatusToStage(newStatus);
+    setStage(mappedStage);
   };
 
   const validateOfficePhone = (val) => {
@@ -734,8 +745,10 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
               <label>Status <span style={{ color: 'var(--color-danger)' }}>*</span></label>
               <select value={status} onChange={(e) => { handleStatusChange(e); setStatusError(''); }}>
                 <option value="select">Select Status</option>
+                <option>Open</option>
                 <option>New</option>
                 <option>Contacted</option>
+                <option>Analysis</option>
                 <option>Interested</option>
                 <option>Negotiation</option>
                 <option>Won</option>
@@ -757,7 +770,7 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
             )}
             <div className="form-group" style={{ marginBottom: '16px' }}>
               <label>Stage <span style={{ color: 'var(--color-danger)' }}>*</span></label>
-              <select value={stage} onChange={(e) => { setStage(e.target.value); setStageError(''); }}>
+              <select value={stage} disabled style={{ backgroundColor: '#F1F5F9', color: 'var(--color-text-muted)', cursor: 'not-allowed' }}>
                 <option value="select">Select Stage</option>
                 {stagesList && stagesList.length > 0 ? (
                   stagesList.map(stg => (
@@ -828,8 +841,10 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
                 zIndex: 0
               }}></div>
 
-              {LIFECYCLE_PIPELINES[pipelineType].stages.map((stg, index) => {
-                const currentStageIndex = LIFECYCLE_PIPELINES[pipelineType].stages.indexOf(stage);
+              {(stagesList && stagesList.length > 0 ? [...stagesList].sort((a, b) => a.sortOrder - b.sortOrder) : LIFECYCLE_PIPELINES.enterprise.stages.map((s, idx) => ({ id: idx, name: s }))).map((stageItem, index) => {
+                const stgName = typeof stageItem === 'string' ? stageItem : stageItem.name;
+                const pipelineStages = stagesList && stagesList.length > 0 ? [...stagesList].sort((a, b) => a.sortOrder - b.sortOrder).map(s => s.name) : LIFECYCLE_PIPELINES.enterprise.stages;
+                const currentStageIndex = pipelineStages.indexOf(stage);
                 const isCompleted = index < currentStageIndex;
                 const isActive = index === currentStageIndex;
                 const isUpcoming = index > currentStageIndex;
@@ -850,11 +865,11 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
                 };
 
                 if (isCompleted) {
-                  dotStyle.backgroundColor = stg === 'Closed Lost' ? 'var(--color-danger)' : 'var(--color-success)';
+                  dotStyle.backgroundColor = stgName === 'Closed Lost' ? 'var(--color-danger)' : 'var(--color-success)';
                   dotStyle.color = '#fff';
                   dotStyle.border = 'none';
                 } else if (isActive) {
-                  if (stg === 'Closed Lost') {
+                  if (stgName === 'Closed Lost') {
                     dotStyle.backgroundColor = 'var(--color-danger)';
                     dotStyle.color = '#fff';
                     dotStyle.border = 'none';
@@ -871,26 +886,35 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
                   dotStyle.border = '2px solid var(--color-border)';
                 }
 
+                const handleStepperClick = () => {
+                  if (isEditMode) {
+                    setStage(stgName);
+                    const matchedStatus = (stagesList && stagesList.length > 0)
+                      ? stagesList.find(s => s.name === stgName)?.status
+                      : null;
+                    if (matchedStatus) {
+                      setStatus(matchedStatus);
+                    } else {
+                      const fallbackBackMap = {
+                        'Prospecting': 'Open',
+                        'Qualification': 'New',
+                        'Initial Discussion': 'Contacted',
+                        'Needs Analysis': 'Analysis',
+                        'Proposal': 'Interested',
+                        'Negotiation': 'Negotiation',
+                        'Closed Won': 'Won',
+                        'Closed Lost': 'Lost'
+                      };
+                      setStatus(fallbackBackMap[stgName] || 'New');
+                    }
+                  }
+                };
+
                 return (
-                  <div key={stg} style={{ display: 'flex', alignItems: 'center', gap: '12px', zIndex: 1 }}>
+                  <div key={stgName} style={{ display: 'flex', alignItems: 'center', gap: '12px', zIndex: 1 }}>
                     <div 
                       style={dotStyle}
-                      onClick={() => {
-                        if (isEditMode) {
-                          setStage(stg);
-                          if (pipelineType === 'enterprise') {
-                            switch (stg) {
-                              case 'Qualification': setStatus('New'); break;
-                              case 'Initial Discussion': setStatus('Contacted'); break;
-                              case 'Proposal': setStatus('Interested'); break;
-                              case 'Negotiation': setStatus('Negotiation'); break;
-                              case 'Closed Won': setStatus('Won'); break;
-                              case 'Closed Lost': setStatus('Lost'); break;
-                              default: break;
-                            }
-                          }
-                        }
-                      }}
+                      onClick={handleStepperClick}
                     >
                       {isCompleted ? '✓' : index + 1}
                     </div>
@@ -898,27 +922,12 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
                       <span style={{ 
                         fontSize: '14px', 
                         fontWeight: isActive ? '600' : '500',
-                        color: isActive ? (stg === 'Closed Lost' ? 'var(--color-danger)' : 'var(--color-primary)') : (isCompleted ? (stg === 'Closed Lost' ? 'var(--color-danger)' : 'var(--color-text-main)') : 'var(--color-text-muted)'),
+                        color: isActive ? (stgName === 'Closed Lost' ? 'var(--color-danger)' : 'var(--color-primary)') : (isCompleted ? (stgName === 'Closed Lost' ? 'var(--color-danger)' : 'var(--color-text-main)') : 'var(--color-text-muted)'),
                         cursor: isEditMode ? 'pointer' : 'default'
                       }}
-                      onClick={() => {
-                        if (isEditMode) {
-                          setStage(stg);
-                          if (pipelineType === 'enterprise') {
-                            switch (stg) {
-                              case 'Qualification': setStatus('New'); break;
-                              case 'Initial Discussion': setStatus('Contacted'); break;
-                              case 'Proposal': setStatus('Interested'); break;
-                              case 'Negotiation': setStatus('Negotiation'); break;
-                              case 'Closed Won': setStatus('Won'); break;
-                              case 'Closed Lost': setStatus('Lost'); break;
-                              default: break;
-                            }
-                          }
-                        }
-                      }}
+                      onClick={handleStepperClick}
                       >
-                        {stg}
+                        {stgName}
                       </span>
                     </div>
                   </div>

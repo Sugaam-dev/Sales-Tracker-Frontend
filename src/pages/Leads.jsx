@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import LeadProfile, { LIFECYCLE_PIPELINES } from './LeadProfile';
 import { X, Edit2, Trash2, Phone, Mail, Calendar, Download, Plus, MoreVertical, Sparkles, Calculator, RotateCcw } from 'lucide-react';
-import { fetchCurrentUsers, fetchMasterStages, fetchLeads, fetchLeadById } from '../services/leadService';
+import { fetchCurrentUsers, fetchMasterStages, fetchLeads, fetchLeadById, updateLead } from '../services/leadService';
 import './Leads.css';
 
 import { initialLeadsData } from './mockLeads';
@@ -16,8 +16,15 @@ export default function Leads() {
   const [selectedLead, setSelectedLead] = useState(null);
   const [isCreatingLead, setIsCreatingLead] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editStatus, setEditStatus] = useState('New');
   const [activeTab, setActiveTab] = useState('overview');
   const [currentPage, setCurrentPage] = useState(1);
+
+  useEffect(() => {
+    if (isEditModalOpen && selectedLead) {
+      setEditStatus(selectedLead.status || 'New');
+    }
+  }, [isEditModalOpen, selectedLead]);
   const [leadsPerPage, setLeadsPerPage] = useState(5);
   const [classificationLead, setClassificationLead] = useState(null);
   const [classStatus, setClassStatus] = useState('New');
@@ -227,7 +234,23 @@ export default function Leads() {
     }
   }, [classificationLead]);
 
-  const handleClassificationSave = () => {
+  const handleClassificationSave = async () => {
+    if (classStatus === 'Lost' && (!classLostReason || !classLostReason.trim())) {
+      alert('Please provide a reason for marking this lead as Lost.');
+      return;
+    }
+
+    const previousLeads = [...leads];
+    const updatedPayload = {
+      status: classStatus,
+      stage: classStage,
+      pipelineType: classPipeline,
+      priority: classPriority,
+      source: classSource,
+      sentiment: classSentiment,
+      lostReason: classStatus === 'Lost' ? classLostReason : undefined,
+    };
+
     setLeads(prevLeads => prevLeads.map(l => 
       l.id === classificationLead.id 
       ? { 
@@ -238,12 +261,20 @@ export default function Leads() {
           priority: classPriority,
           source: classSource,
           sentiment: classSentiment,
-          lostReason: classStatus === 'Lost' ? classLostReason : '',
+          lostReason: classStatus === 'Lost' ? classLostReason : (l.lostReason || l.reason || ''),
           history: [{ date: new Date().toISOString().split('T')[0], action: `Classification details updated (Status: ${classStatus}, Stage: ${classStage})`, user: 'You' }, ...l.history]
         } 
       : l
     ));
     setClassificationLead(null);
+
+    try {
+      await updateLead(classificationLead.id, updatedPayload);
+    } catch (err) {
+      console.error('Failed to save classification details:', err);
+      setLeads(previousLeads);
+      alert(err.message || 'Unable to update lead. Please try again.');
+    }
   };
 
   const handleDelete = () => {
@@ -253,8 +284,13 @@ export default function Leads() {
     }
   };
 
-  const mapStatusToStage = (status) => {
-    switch(status) {
+  const mapStatusToStage = (statusVal) => {
+    if (stagesList && stagesList.length > 0) {
+      const matched = stagesList.find(s => s.status === statusVal);
+      if (matched) return matched.name;
+    }
+    switch(statusVal) {
+      case 'Open': return 'Prospecting';
       case 'New': return 'Qualification';
       case 'Contacted': return 'Initial Discussion';
       case 'Analysis': return 'Needs Analysis';
@@ -266,15 +302,23 @@ export default function Leads() {
     }
   };
 
-  const handleEditSave = (e) => {
+  const handleEditSave = async (e) => {
     e.preventDefault();
     const updatedCompany = e.target.elements.company.value;
     const updatedContact = e.target.elements.contact.value;
     const updatedStatus = e.target.elements.status.value;
     const updatedValue = e.target.elements.value.value;
-    
-    // Auto map stage based on status
+    const lostReasonInput = e.target.elements.lostReason;
+    const updatedLostReason = lostReasonInput ? lostReasonInput.value : '';
+
+    if (updatedStatus === 'Lost' && (!updatedLostReason || !updatedLostReason.trim())) {
+      alert('Please provide a reason for marking this lead as Lost.');
+      return;
+    }
+
     const autoMappedStage = mapStatusToStage(updatedStatus);
+    const previousLeads = [...leads];
+    const previousSelectedLead = selectedLead;
 
     const newLeads = leads.map(l => 
       l.id === selectedLead.id 
@@ -285,13 +329,32 @@ export default function Leads() {
           status: updatedStatus,
           stage: autoMappedStage, 
           value: updatedValue,
+          lostReason: updatedStatus === 'Lost' ? updatedLostReason : (l.lostReason || l.reason || ''),
           history: [{ date: new Date().toISOString().split('T')[0], action: `Status updated to ${updatedStatus}`, user: 'You' }, ...l.history]
         } 
       : l
     );
+
     setLeads(newLeads);
     setSelectedLead(newLeads.find(l => l.id === selectedLead.id));
     setIsEditModalOpen(false);
+
+    try {
+      const payload = {
+        company: updatedCompany,
+        contact: updatedContact,
+        status: updatedStatus,
+        stage: autoMappedStage,
+        value: updatedValue,
+        lostReason: updatedStatus === 'Lost' ? updatedLostReason : undefined,
+      };
+      await updateLead(selectedLead.id, payload);
+    } catch (err) {
+      console.error('Failed to update lead:', err);
+      setLeads(previousLeads);
+      setSelectedLead(previousSelectedLead);
+      alert(err.message || 'Unable to update lead. Please try again.');
+    }
   };
 
   const getStageBadgeColor = (stage) => {
@@ -836,7 +899,8 @@ export default function Leads() {
               </div>
               <div>
                 <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500' }}>Status</label>
-                <select name="status" defaultValue={selectedLead.status} style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)' }}>
+                <select name="status" value={editStatus} onChange={(e) => setEditStatus(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)' }}>
+                  <option>Open</option>
                   <option>New</option>
                   <option>Contacted</option>
                   <option>Analysis</option>
@@ -845,8 +909,21 @@ export default function Leads() {
                   <option>Won</option>
                   <option>Lost</option>
                 </select>
-                <small style={{ color: 'var(--color-text-muted)' }}>Stage will automatically update based on Status</small>
+                <small style={{ display: 'block', marginTop: '4px', color: 'var(--color-text-muted)' }}>Stage will automatically update based on Status</small>
               </div>
+              {editStatus === 'Lost' && (
+                <div>
+                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500' }}>Lost Reason *</label>
+                  <input 
+                    name="lostReason" 
+                    type="text" 
+                    defaultValue={selectedLead.lostReason || selectedLead.reason || ''} 
+                    required 
+                    placeholder="e.g. Price Too High"
+                    style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)' }} 
+                  />
+                </div>
+              )}
               <div>
                 <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500' }}>Deal Value</label>
                 <input name="value" type="text" defaultValue={selectedLead.value} required style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)' }} />
@@ -907,18 +984,11 @@ export default function Leads() {
                     onChange={(e) => {
                       const newStatus = e.target.value;
                       setClassStatus(newStatus);
-                      switch (newStatus) {
-                        case 'New':         setClassStage('Qualification');    break;
-                        case 'Contacted':   setClassStage('Initial Discussion'); break;
-                        case 'Analysis':    setClassStage('Needs Analysis');    break;
-                        case 'Interested':  setClassStage('Proposal');          break;
-                        case 'Negotiation': setClassStage('Negotiation');       break;
-                        case 'Won':         setClassStage('Closed Won');        break;
-                        case 'Lost':        setClassStage('Closed Lost');       break;
-                        default: break;
-                      }
+                      const mappedStage = mapStatusToStage(newStatus);
+                      setClassStage(mappedStage);
                     }}
                   >
+                    <option>Open</option>
                     <option>New</option>
                     <option>Contacted</option>
                     <option>Analysis</option>
@@ -944,11 +1014,21 @@ export default function Leads() {
 
                 <div className="form-group">
                   <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '4px' }}>Stage</label>
-                  <select value={classStage} onChange={(e) => setClassStage(e.target.value)}>
-                    {LIFECYCLE_PIPELINES[classPipeline]?.stages.map(stg => (
-                      <option key={stg} value={stg}>{stg}</option>
-                    ))}
-                  </select>
+                  <input 
+                    type="text" 
+                    value={classStage} 
+                    readOnly 
+                    disabled 
+                    style={{ 
+                      width: '100%', 
+                      padding: '8px 12px', 
+                      border: '1px solid var(--color-border)', 
+                      borderRadius: 'var(--radius-md)',
+                      backgroundColor: '#F1F5F9',
+                      color: 'var(--color-text-muted)',
+                      cursor: 'not-allowed'
+                    }} 
+                  />
                 </div>
 
                 <div className="form-group">
@@ -1004,8 +1084,10 @@ export default function Leads() {
                     zIndex: 0
                   }}></div>
 
-                  {LIFECYCLE_PIPELINES[classPipeline]?.stages.map((stg, index) => {
-                    const currentStageIndex = LIFECYCLE_PIPELINES[classPipeline].stages.indexOf(classStage);
+                  {(stagesList && stagesList.length > 0 ? [...stagesList].sort((a, b) => a.sortOrder - b.sortOrder) : LIFECYCLE_PIPELINES.enterprise.stages.map((s, idx) => ({ id: idx, name: s }))).map((stageItem, index) => {
+                    const stgName = typeof stageItem === 'string' ? stageItem : stageItem.name;
+                    const pipelineStages = stagesList && stagesList.length > 0 ? [...stagesList].sort((a, b) => a.sortOrder - b.sortOrder).map(s => s.name) : LIFECYCLE_PIPELINES.enterprise.stages;
+                    const currentStageIndex = pipelineStages.indexOf(classStage);
                     const isCompleted = index < currentStageIndex;
                     const isActive = index === currentStageIndex;
                     
@@ -1025,11 +1107,11 @@ export default function Leads() {
                     };
 
                     if (isCompleted) {
-                      dotStyle.backgroundColor = stg === 'Closed Lost' ? 'var(--color-danger)' : 'var(--color-success)';
+                      dotStyle.backgroundColor = stgName === 'Closed Lost' ? 'var(--color-danger)' : 'var(--color-success)';
                       dotStyle.color = '#fff';
                       dotStyle.border = 'none';
                     } else if (isActive) {
-                      if (stg === 'Closed Lost') {
+                      if (stgName === 'Closed Lost') {
                         dotStyle.backgroundColor = 'var(--color-danger)';
                         dotStyle.color = '#fff';
                         dotStyle.border = 'none';
@@ -1046,51 +1128,45 @@ export default function Leads() {
                       dotStyle.border = '2px solid var(--color-border)';
                     }
 
+                    const handleStepperClick = () => {
+                      setClassStage(stgName);
+                      const matchedStatus = (stagesList && stagesList.length > 0)
+                        ? stagesList.find(s => s.name === stgName)?.status
+                        : null;
+                      if (matchedStatus) {
+                        setClassStatus(matchedStatus);
+                      } else {
+                        const fallbackBackMap = {
+                          'Prospecting': 'Open',
+                          'Qualification': 'New',
+                          'Initial Discussion': 'Contacted',
+                          'Needs Analysis': 'Analysis',
+                          'Proposal': 'Interested',
+                          'Negotiation': 'Negotiation',
+                          'Closed Won': 'Won',
+                          'Closed Lost': 'Lost'
+                        };
+                        setClassStatus(fallbackBackMap[stgName] || 'New');
+                      }
+                    };
+
                     return (
-                      <div key={stg} style={{ display: 'flex', alignItems: 'center', gap: '12px', zIndex: 1 }}>
+                      <div key={stgName} style={{ display: 'flex', alignItems: 'center', gap: '12px', zIndex: 1 }}>
                         <div 
                           style={dotStyle}
-                          onClick={() => {
-                            setClassStage(stg);
-                            if (classPipeline === 'enterprise') {
-                              switch (stg) {
-                                case 'Qualification': setClassStatus('New'); break;
-                                case 'Initial Discussion': setClassStatus('Contacted'); break;
-                                case 'Needs Analysis': setClassStatus('Analysis'); break;
-                                case 'Proposal': setClassStatus('Interested'); break;
-                                case 'Negotiation': setClassStatus('Negotiation'); break;
-                                case 'Closed Won': setClassStatus('Won'); break;
-                                case 'Closed Lost': setClassStatus('Lost'); break;
-                                default: break;
-                              }
-                            }
-                          }}
+                          onClick={handleStepperClick}
                         >
                           {isCompleted ? '✓' : index + 1}
                         </div>
                         <span style={{ 
                           fontSize: '13px', 
                           fontWeight: isActive ? '600' : '500',
-                          color: isActive ? (stg === 'Closed Lost' ? 'var(--color-danger)' : 'var(--color-primary)') : (isCompleted ? (stg === 'Closed Lost' ? 'var(--color-danger)' : 'var(--color-text-main)') : 'var(--color-text-muted)'),
+                          color: isActive ? (stgName === 'Closed Lost' ? 'var(--color-danger)' : 'var(--color-primary)') : (isCompleted ? (stgName === 'Closed Lost' ? 'var(--color-danger)' : 'var(--color-text-main)') : 'var(--color-text-muted)'),
                           cursor: 'pointer'
                         }}
-                        onClick={() => {
-                          setClassStage(stg);
-                          if (classPipeline === 'enterprise') {
-                            switch (stg) {
-                              case 'Qualification': setClassStatus('New'); break;
-                              case 'Initial Discussion': setClassStatus('Contacted'); break;
-                              case 'Needs Analysis': setClassStatus('Analysis'); break;
-                              case 'Proposal': setClassStatus('Interested'); break;
-                              case 'Negotiation': setClassStatus('Negotiation'); break;
-                              case 'Closed Won': setClassStatus('Won'); break;
-                              case 'Closed Lost': setClassStatus('Lost'); break;
-                              default: break;
-                            }
-                          }
-                        }}
+                        onClick={handleStepperClick}
                         >
-                          {stg}
+                          {stgName}
                         </span>
                       </div>
                     );

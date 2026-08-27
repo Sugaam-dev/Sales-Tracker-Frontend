@@ -46,3 +46,18 @@ export async function fetchLeadById(id) {
   }
   return data;
 }
+
+export async function updateLead(id, payload) {
+  const response = await authenticatedFetch(`${API.LEADS}/${id}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to update lead.');
+  }
+  return data;
+}
