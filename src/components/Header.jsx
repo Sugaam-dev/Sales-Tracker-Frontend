@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Search, Plus, Bell, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import QuickCreateLeadModal from './QuickCreateLeadModal';
+import { createLead } from '../services/leadService';
 import './Header.css';
 
 const SEARCH_DATA = [
@@ -58,13 +59,38 @@ export default function Header() {
       )
     : [];
 
-  const handleCreateLead = () => {
+  const handleCreateLead = async (data) => {
     setIsModalOpen(false);
-    setToastMessage('Lead created - Added to pipeline');
-
-    setTimeout(() => {
-      setToastMessage('');
-    }, 3000);
+    try {
+      const cleanPhone = String(data.phone).replace(/[^0-9]/g, '').slice(0, 10);
+      const payload = {
+        company: data.companyName,
+        contact: data.leadName,
+        email: data.email,
+        phone: cleanPhone,
+        officePhone: cleanPhone,
+        owner: data.owner,
+        stage: 'Qualification',
+        status: data.status,
+        sentiment: 'Neutral',
+        priority: data.priority === 'Medium' ? 'Normal' : data.priority,
+      };
+      await createLead(payload);
+      setToastMessage('Lead created - Added to pipeline');
+      
+      setTimeout(() => {
+        setToastMessage('');
+        // Reload page to show the new lead in the list
+        if (window.location.pathname === '/leads') {
+          window.location.reload();
+        }
+      }, 1500);
+    } catch (err) {
+      console.error('Quick Create Error:', err);
+      // Extract exact validation error from backend response if available
+      const errorDetail = err.response?.data?.error || err.response?.data?.message || err.message;
+      alert(`Failed to quick create lead: ${errorDetail}`);
+    }
   };
 
   const handleSearchChange = (e) => {
