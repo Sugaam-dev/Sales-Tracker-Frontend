@@ -39,7 +39,8 @@ export async function fetchLeads(queryParams = {}) {
 }
 
 export async function fetchLeadById(id) {
-  const response = await authenticatedFetch(`${API.LEADS}/${id}`);
+  const formattedId = String(id).startsWith('L-') ? id : `L-${id}`;
+  const response = await authenticatedFetch(`${API.LEADS}/${formattedId}`);
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(data.message || 'Failed to fetch lead details.');
@@ -48,7 +49,8 @@ export async function fetchLeadById(id) {
 }
 
 export async function updateLead(id, payload) {
-  const response = await authenticatedFetch(`${API.LEADS}/${id}`, {
+  const formattedId = String(id).startsWith('L-') ? id : `L-${id}`;
+  const response = await authenticatedFetch(`${API.LEADS}/${formattedId}`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
@@ -57,7 +59,46 @@ export async function updateLead(id, payload) {
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(data.message || 'Failed to update lead.');
+    const errorDetails = data.errors ? ` (${data.errors})` : '';
+    throw new Error((data.message || 'Failed to update lead.') + errorDetails);
+  }
+  return data;
+}
+
+export async function createLead(payload) {
+  const response = await authenticatedFetch(API.LEADS, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const errorDetails = data.errors ? ` (${data.errors})` : '';
+    throw new Error((data.message || 'Failed to create lead.') + errorDetails);
+  }
+  return data;
+}
+
+export async function deleteLead(id) {
+  const formattedId = String(id).startsWith('L-') ? id : `L-${id}`;
+  const response = await authenticatedFetch(`${API.LEADS}/${formattedId}`, {
+    method: 'DELETE',
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to delete lead.');
+  }
+  return data;
+}
+
+export async function fetchLeadActivities(id) {
+  const formattedId = String(id).startsWith('L-') ? id : `L-${id}`;
+  const response = await authenticatedFetch(`${API.LEADS}/${formattedId}/activities`);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to fetch lead activities.');
   }
   return data;
 }

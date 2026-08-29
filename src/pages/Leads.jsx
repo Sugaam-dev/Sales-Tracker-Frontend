@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import LeadProfile, { LIFECYCLE_PIPELINES } from './LeadProfile';
 import { X, Edit2, Trash2, Phone, Mail, Calendar, Download, Plus, MoreVertical, Sparkles, Calculator, RotateCcw } from 'lucide-react';
-import { fetchCurrentUsers, fetchMasterStages, fetchLeads, fetchLeadById, updateLead } from '../services/leadService';
+import { fetchCurrentUsers, fetchMasterStages, fetchLeads, fetchLeadById, updateLead, createLead, deleteLead } from '../services/leadService';
 import './Leads.css';
 
 import { initialLeadsData } from './mockLeads';
@@ -262,7 +262,7 @@ export default function Leads() {
           source: classSource,
           sentiment: classSentiment,
           lostReason: classStatus === 'Lost' ? classLostReason : (l.lostReason || l.reason || ''),
-          history: [{ date: new Date().toISOString().split('T')[0], action: `Classification details updated (Status: ${classStatus}, Stage: ${classStage})`, user: 'You' }, ...l.history]
+          history: [{ date: new Date().toISOString().split('T')[0], action: `Classification details updated (Status: ${classStatus}, Stage: ${classStage})`, user: 'You' }, ...(l.history || [])]
         } 
       : l
     ));
@@ -277,12 +277,7 @@ export default function Leads() {
     }
   };
 
-  const handleDelete = () => {
-    if (window.confirm('Are you sure you want to delete this lead?')) {
-      setLeads(leads.filter(l => l.id !== selectedLead.id));
-      setSelectedLead(null);
-    }
-  };
+
 
   const mapStatusToStage = (statusVal) => {
     if (stagesList && stagesList.length > 0) {
@@ -330,7 +325,7 @@ export default function Leads() {
           stage: autoMappedStage, 
           value: updatedValue,
           lostReason: updatedStatus === 'Lost' ? updatedLostReason : (l.lostReason || l.reason || ''),
-          history: [{ date: new Date().toISOString().split('T')[0], action: `Status updated to ${updatedStatus}`, user: 'You' }, ...l.history]
+          history: [{ date: new Date().toISOString().split('T')[0], action: `Status updated to ${updatedStatus}`, user: 'You' }, ...(l.history || [])]
         } 
       : l
     );
@@ -345,7 +340,7 @@ export default function Leads() {
         contact: updatedContact,
         status: updatedStatus,
         stage: autoMappedStage,
-        value: updatedValue,
+        value: String(updatedValue).replace(/[^0-9.-]/g, ''),
         lostReason: updatedStatus === 'Lost' ? updatedLostReason : undefined,
       };
       await updateLead(selectedLead.id, payload);
@@ -491,24 +486,64 @@ export default function Leads() {
               setIsEditing(false); 
               navigate('/leads');
             }}
-            onSave={(updatedData) => {
-              if (selectedLead) {
-                // Edit existing lead
-                setLeads(prevLeads => prevLeads.map(l => l.id === selectedLead.id ? { ...l, ...updatedData } : l));
-              } else {
-                // Create new lead
-                const newId = leads.length > 0 ? Math.max(...leads.map(l => l.id)) + 1 : 1;
-                const newLead = {
-                  id: newId,
-                  createdAt: new Date().toISOString(),
-                  ...updatedData
-                };
-                setLeads(prevLeads => [newLead, ...prevLeads]);
+            onSave={async (updatedData) => {
+              // Build only the fields the backend API accepts
+              const backendPayload = {
+                company: updatedData.company || undefined,
+                projectName: updatedData.projectName || undefined,
+                designation: updatedData.designation || undefined,
+                contact: updatedData.contact || undefined,
+                email: updatedData.email || undefined,
+                phone: updatedData.phone || undefined,
+                officePhone: updatedData.officePhone || undefined,
+                officePhoneCountry: updatedData.officePhoneCountry || undefined,
+                owner: updatedData.owner || undefined,
+                industry: updatedData.industry || undefined,
+                size: updatedData.size || undefined,
+                region: updatedData.region || undefined,
+                source: updatedData.source || undefined,
+                stage: updatedData.stage || undefined,
+                status: updatedData.status || undefined,
+                sentiment: updatedData.sentiment || undefined,
+                priority: updatedData.priority || undefined,
+                value: updatedData.value ? String(updatedData.value).replace(/[^0-9.-]/g, '') : undefined,
+                lostReason: updatedData.lostReason || undefined,
+                bestTime: updatedData.bestTime || undefined,
+              };
+              // Remove undefined keys
+              Object.keys(backendPayload).forEach(k => backendPayload[k] === undefined && delete backendPayload[k]);
+
+              try {
+                if (selectedLead) {
+                  // EDIT: send to backend, then use backend response to update state
+                  const res = await updateLead(selectedLead.id, backendPayload);
+                  const saved = res?.data || res;
+                  setLeads(prevLeads => prevLeads.map(l =>
+                    l.id === selectedLead.id ? { ...l, ...saved } : l
+                  ));
+                } else {
+                  // CREATE: send to backend, use backend response as the new lead
+                  const res = await createLead(backendPayload);
+                  const created = res?.data || res;
+                  if (created && created.id) {
+                    setLeads(prevLeads => [created, ...prevLeads]);
+                  }
+                }
+                // Refresh full leads list from backend
+                try {
+                  const refreshed = await fetchLeads({ page: currentPage, limit: 50 });
+                  if (refreshed?.data) setLeads(refreshed.data);
+                } catch (_) { /* non-critical */ }
+              } catch (err) {
+                console.error('Failed to save lead:', err);
+                alert(err.message || 'Failed to save lead.');
+                return; // don't navigate away on error
+              } finally {
+                setIsCreatingLead(false);
+                setSelectedLead(null);
+                setIsEditing(false);
+                navigate('/leads');
               }
-              setIsCreatingLead(false);
-              setSelectedLead(null);
-              setIsEditing(false);
-              navigate('/leads');
             }}
           />
         ) : (
@@ -804,12 +839,20 @@ export default function Leads() {
                             <span>Commercial Estimation</span>
                           </button>
                           <button 
-                            onClick={(e) => {
+                            onClick={async (e) => {
                               e.stopPropagation();
                               setOpenMenuId(null);
                               if (window.confirm('Are you sure you want to delete this lead?')) {
+                                const previousLeads = [...leads];
                                 setLeads(prevLeads => prevLeads.filter(l => l.id !== lead.id));
                                 if (selectedLead?.id === lead.id) setSelectedLead(null);
+                                try {
+                                  await deleteLead(lead.id);
+                                } catch (err) {
+                                  console.error('Failed to delete lead:', err);
+                                  setLeads(previousLeads);
+                                  alert(err.message || 'Failed to delete lead.');
+                                }
                               }
                             }}
                             style={{

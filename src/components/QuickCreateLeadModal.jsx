@@ -1,5 +1,6 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
+import { fetchCurrentUsers } from '../services/leadService';
 import './Modal.css';
 
 export default function QuickCreateLeadModal({
@@ -8,10 +9,17 @@ export default function QuickCreateLeadModal({
   onCreate,
 }) {
   const dialogRef = useRef(null);
+  const [users, setUsers] = useState([]);
 
   useEffect(() => {
     if (isOpen) {
       dialogRef.current?.showModal();
+      // Fetch dynamic users when modal opens
+      fetchCurrentUsers().then(res => {
+        if (res.success && res.data) {
+          setUsers(res.data);
+        }
+      }).catch(err => console.error("Failed to fetch users", err));
     } else {
       dialogRef.current?.close();
     }
@@ -19,7 +27,9 @@ export default function QuickCreateLeadModal({
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onCreate();
+    const formData = new FormData(e.target);
+    const data = Object.fromEntries(formData.entries());
+    onCreate(data);
   };
 
   return (
@@ -124,9 +134,17 @@ export default function QuickCreateLeadModal({
                 required
               >
                 <option value="">Select...</option>
-                <option>Debabrata Ghosh</option>
-                <option>Sanjay Mishra</option>
-                <option>Hemant Kumar</option>
+                {users.length > 0 ? (
+                  users.map(user => (
+                    <option key={user.id} value={user.name}>{user.name}</option>
+                  ))
+                ) : (
+                  <>
+                    <option>Debabrata Ghosh</option>
+                    <option>Sanjay Mishra</option>
+                    <option>Hemant Kumar</option>
+                  </>
+                )}
               </select>
             </div>
 

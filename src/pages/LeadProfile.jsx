@@ -1,5 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Upload, X } from 'lucide-react';
+import { fetchLeadActivities } from '../services/leadService';
 
 // Country codes with flags (emoji flags work universally)
 const COUNTRY_CODES = [
@@ -191,6 +192,7 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
   const [region, setRegion] = useState(lead?.region || 'select');
   const [projectName, setProjectName] = useState(lead?.projectName || '');
   const [contact, setContact] = useState(lead?.contact || '');
+  const [designation, setDesignation] = useState(lead?.designation || '');
   const [priority, setPriority] = useState(lead?.priority || 'select');
   const [source, setSource] = useState(lead?.source || 'select');
   const [sentiment, setSentiment] = useState(lead?.sentiment || 'select');
@@ -203,9 +205,9 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
   const [officePhoneTouched, setOfficePhoneTouched] = useState(false);
 
   const [bestTime, setBestTime] = useState(() => {
-    const val = lead?.criteria?.bestTime;
+    const val = lead?.bestTime || lead?.criteria?.bestTime;
     if (['Morning', 'Afternoon', 'Evening'].includes(val)) return val;
-    return 'Select One';
+    return val || 'Select One';
   });
   const [bestTimeError, setBestTimeError] = useState('');
 
@@ -269,6 +271,24 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
       ...defaultActs
     ];
   });
+
+  useEffect(() => {
+    if (isExistingLead && lead?.id) {
+      fetchLeadActivities(lead.id).then(res => {
+        if (res.success && res.data && res.data.length > 0) {
+          const fetchedActs = res.data.map(a => ({
+            type: a.type || a.action || 'System Log',
+            user: a.user || 'System',
+            time: a.date || a.createdAt || 'Recently',
+            note: a.note || a.action || '',
+            iconClass: (a.type || a.action || '').toLowerCase().includes('email') ? 'email' : ((a.type || a.action || '').toLowerCase().includes('call') ? 'call' : 'system'),
+            iconBg: 'var(--color-primary)'
+          }));
+          setActivities(fetchedActs);
+        }
+      }).catch(err => console.error('Failed to load activities', err));
+    }
+  }, [isExistingLead, lead?.id]);
 
   // ── Handlers ──────────────────────────────────────────────────────
   const handlePhoneChange = (val) => {
@@ -427,6 +447,7 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
     onSave({
       company,
       projectName,
+      designation,
       industry,
       size,
       region,
@@ -436,7 +457,7 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
       priority,
       source,
       sentiment,
-      value,
+      value: String(value).replace(/[^0-9.-]/g, ''),
       lostReason: status === 'Lost' ? lostReason : '',
       phone,
       altPhone,
@@ -445,6 +466,7 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
       owner,
       officePhone,
       officePhoneCountry,
+      bestTime,
       criteria: {
         ...lead?.criteria,
         bestTime
@@ -554,7 +576,7 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
               </div>
               <div className="form-group">
                 <label>Designation </label> 
-                <input type="text" defaultValue="" placeholder="VP of Sales" />
+                <input type="text" value={designation} onChange={(e) => setDesignation(e.target.value)} placeholder="VP of Sales" />
               </div>
               <div className="form-group">
                 <label>Email <span style={{ color: 'var(--color-danger)' }}>*</span></label>
@@ -789,7 +811,7 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
               <select value={priority} onChange={(e) => { setPriority(e.target.value); setPriorityError(''); }}>
                 <option value="select">Select Priority</option>
                 <option>Low</option>
-                <option>Medium</option>
+                <option>Normal</option>
                 <option>High</option>
                 <option>Urgent</option>
               </select>
