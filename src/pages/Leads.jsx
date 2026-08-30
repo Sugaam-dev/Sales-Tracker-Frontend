@@ -509,6 +509,18 @@ export default function Leads() {
                 value: updatedData.value ? String(updatedData.value).replace(/[^0-9.-]/g, '') : undefined,
                 lostReason: updatedData.lostReason || undefined,
                 bestTime: updatedData.bestTime || undefined,
+                lifecycleTemplate: updatedData.lifecycleTemplate || undefined,
+                kamName: updatedData.kamName || undefined,
+                bestTimeToConnect: updatedData.bestTimeToConnect || undefined,
+                alternatePhone: updatedData.alternatePhone || undefined,
+                alternatePhoneCountry: updatedData.alternatePhoneCountry || undefined,
+                linkedinProfileUrl: updatedData.linkedinProfileUrl || undefined,
+                linkedinCompanyPageUrl: updatedData.linkedinCompanyPageUrl || undefined,
+                estimatedRequirementDate: updatedData.estimatedRequirementDate || undefined,
+                lastContactDate: updatedData.lastContactDate || undefined,
+                nextFollowUp: updatedData.nextFollowUp || undefined,
+                basicRequirements: updatedData.basicRequirements || undefined,
+                notes: updatedData.notes || undefined,
               };
               // Remove undefined keys
               Object.keys(backendPayload).forEach(k => backendPayload[k] === undefined && delete backendPayload[k]);

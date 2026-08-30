@@ -1,28 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import { Phone, Mail, Calendar, MonitorPlay, Globe, Plus, X, Play, Pause, Paperclip, FileText, CheckCircle2, Clock, Sparkles, RefreshCw, ChevronUp, ChevronDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { initialLeadsData } from './mockLeads';
+import { fetchLeads, fetchCurrentUsers } from '../services/leadService';
 import './Activities.css';
 
-// Helper to generate dynamic activities based on mockLeads dataset
-const generateActivities = () => {
+// Helper to generate dynamic activities based on leadsList dataset
+const generateActivities = (leadsList) => {
   const list = [];
+  if (!leadsList) return list;
   let actId = 1;
-  initialLeadsData.forEach((lead) => {
+  leadsList.forEach((lead) => {
+    const valClean = lead.value ? parseInt(String(lead.value).replace(/[^0-9]/g, ''), 10) : 0;
+    const dealSize = valClean > 150000 ? 'Large' : valClean > 50000 ? 'Medium' : 'Small';
+
     // 1. Lead Profile Created (Other)
     list.push({
       id: actId++,
       type: 'Other',
       desc: `Lead profile created for ${lead.company} (${lead.contact})`,
-      lead: lead.company,
-      rep: lead.owner,
-      time: lead.createdAt.replace('T', ' ').substring(0, 16),
+      lead: lead.contact,
+      rep: lead.owner || 'System',
+      time: lead.createdAt ? lead.createdAt.replace('T', ' ').substring(0, 16) : 'Recently',
       outcome: 'Success',
       icon: <FileText size={14} />,
       colorClass: 'other-icon',
-      geo: lead.region,
-      industry: lead.industry,
-      dealSize: parseInt(lead.value.replace(/[^0-9]/g, ''), 10) > 150000 ? 'Large' : parseInt(lead.value.replace(/[^0-9]/g, ''), 10) > 50000 ? 'Medium' : 'Small'
+      geo: lead.region || 'Unknown',
+      industry: lead.industry || 'Unknown',
+      dealSize: dealSize
     });
 
     // 2. Email Activity for most leads
@@ -31,15 +35,15 @@ const generateActivities = () => {
         id: actId++,
         type: 'Email',
         desc: `Sent introduction email and product presentation deck to ${lead.contact}`,
-        lead: lead.company,
-        rep: lead.owner,
-        time: new Date(new Date(lead.createdAt).getTime() + 2 * 3600000).toISOString().replace('T', ' ').substring(0, 16),
+        lead: lead.contact,
+        rep: lead.owner || 'System',
+        time: lead.createdAt ? new Date(new Date(lead.createdAt).getTime() + 2 * 3600000).toISOString().replace('T', ' ').substring(0, 16) : 'Recently',
         outcome: 'Interested',
         icon: <Mail size={14} />,
         colorClass: 'email-icon',
-        geo: lead.region,
-        industry: lead.industry,
-        dealSize: parseInt(lead.value.replace(/[^0-9]/g, ''), 10) > 150000 ? 'Large' : parseInt(lead.value.replace(/[^0-9]/g, ''), 10) > 50000 ? 'Medium' : 'Small'
+        geo: lead.region || 'Unknown',
+        industry: lead.industry || 'Unknown',
+        dealSize: dealSize
       });
     }
 
@@ -49,15 +53,15 @@ const generateActivities = () => {
         id: actId++,
         type: 'Call',
         desc: `Requirements assessment call with ${lead.contact}`,
-        lead: lead.company,
-        rep: lead.owner,
-        time: new Date(new Date(lead.createdAt).getTime() + 24 * 3600000).toISOString().replace('T', ' ').substring(0, 16),
+        lead: lead.contact,
+        rep: lead.owner || 'System',
+        time: lead.createdAt ? new Date(new Date(lead.createdAt).getTime() + 24 * 3600000).toISOString().replace('T', ' ').substring(0, 16) : 'Recently',
         outcome: 'Scheduled Demo',
         icon: <Phone size={14} />,
         colorClass: 'call-icon',
-        geo: lead.region,
-        industry: lead.industry,
-        dealSize: parseInt(lead.value.replace(/[^0-9]/g, ''), 10) > 150000 ? 'Large' : parseInt(lead.value.replace(/[^0-9]/g, ''), 10) > 50000 ? 'Medium' : 'Small'
+        geo: lead.region || 'Unknown',
+        industry: lead.industry || 'Unknown',
+        dealSize: dealSize
       });
     }
 
@@ -67,15 +71,15 @@ const generateActivities = () => {
         id: actId++,
         type: 'Demo',
         desc: `Virtual product demonstration and SLA capability review`,
-        lead: lead.company,
-        rep: lead.owner,
-        time: new Date(new Date(lead.createdAt).getTime() + 48 * 3600000).toISOString().replace('T', ' ').substring(0, 16),
+        lead: lead.contact,
+        rep: lead.owner || 'System',
+        time: lead.createdAt ? new Date(new Date(lead.createdAt).getTime() + 48 * 3600000).toISOString().replace('T', ' ').substring(0, 16) : 'Recently',
         outcome: 'Highly Positive',
         icon: <MonitorPlay size={14} />,
         colorClass: 'demo-icon',
-        geo: lead.region,
-        industry: lead.industry,
-        dealSize: parseInt(lead.value.replace(/[^0-9]/g, ''), 10) > 150000 ? 'Large' : parseInt(lead.value.replace(/[^0-9]/g, ''), 10) > 50000 ? 'Medium' : 'Small'
+        geo: lead.region || 'Unknown',
+        industry: lead.industry || 'Unknown',
+        dealSize: dealSize
       });
     }
 
@@ -84,16 +88,16 @@ const generateActivities = () => {
       list.push({
         id: actId++,
         type: 'Proposal Sent',
-        desc: `Emailed formal commercial proposal valuing ${lead.value}`,
-        lead: lead.company,
-        rep: lead.owner,
-        time: new Date(new Date(lead.createdAt).getTime() + 72 * 3600000).toISOString().replace('T', ' ').substring(0, 16),
+        desc: `Emailed formal commercial proposal valuing ${lead.value || 'N/A'}`,
+        lead: lead.contact,
+        rep: lead.owner || 'System',
+        time: lead.createdAt ? new Date(new Date(lead.createdAt).getTime() + 72 * 3600000).toISOString().replace('T', ' ').substring(0, 16) : 'Recently',
         outcome: 'Proposal Sent',
         icon: <Mail size={14} />,
         colorClass: 'proposal-icon',
-        geo: lead.region,
-        industry: lead.industry,
-        dealSize: parseInt(lead.value.replace(/[^0-9]/g, ''), 10) > 150000 ? 'Large' : parseInt(lead.value.replace(/[^0-9]/g, ''), 10) > 50000 ? 'Medium' : 'Small'
+        geo: lead.region || 'Unknown',
+        industry: lead.industry || 'Unknown',
+        dealSize: dealSize
       });
     }
   });
@@ -160,7 +164,38 @@ export default function Activities() {
     }, 1000);
   };
 
-  const [activitiesData, setActivitiesData] = useState(() => generateActivities());
+  const [leadsList, setLeadsList] = useState([]);
+  const [activitiesData, setActivitiesData] = useState([]);
+  const [usersList, setUsersList] = useState([]);
+
+  useEffect(() => {
+    const loadLeads = async () => {
+      try {
+        const res = await fetchLeads({ limit: 100 });
+        if (res.success && res.data) {
+          setLeadsList(res.data);
+          const generated = generateActivities(res.data);
+          setActivitiesData(generated);
+        }
+      } catch (err) {
+        console.error('Failed to load leads for activities:', err);
+      }
+    };
+
+    const loadUsers = async () => {
+      try {
+        const res = await fetchCurrentUsers();
+        if (res.success && res.data) {
+          setUsersList(res.data);
+        }
+      } catch (err) {
+        console.error('Failed to load users for activities:', err);
+      }
+    };
+
+    loadLeads();
+    loadUsers();
+  }, []);
 
   const [activeActivityModal, setActiveActivityModal] = useState(null);
   const [actSearch, setActSearch] = useState('');
@@ -208,25 +243,29 @@ export default function Activities() {
     return list;
   };
 
-  const overdueActivitiesList = initialLeadsData.filter(l => l.isOverdue || (l.status !== 'Won' && l.status !== 'Lost' && new Date(l.estDate) < new Date('2026-07-07'))).map(l => {
+  const getLeadDate = (l) => {
+    return l.nextFollowUp || l.estimatedRequirementDate || l.lastContactDate || '';
+  };
+
+  const overdueActivitiesList = leadsList.filter(l => l.status !== 'Won' && l.status !== 'Lost' && getLeadDate(l) && new Date(getLeadDate(l)) < new Date()).map(l => {
     let actType = 'Call';
     let actDesc = 'Follow-up Call';
     if (l.stage === 'Proposal') { actType = 'Proposal Sent'; actDesc = 'Proposal Follow-up'; }
     if (l.stage === 'Negotiation') { actType = 'Meeting'; actDesc = 'Contract Discussion'; }
     if (l.stage === 'Needs Analysis') { actType = 'Demo'; actDesc = 'Product Demo'; }
 
-    const diffTime = Math.abs(new Date('2026-07-07') - new Date(l.estDate));
+    const diffTime = Math.abs(new Date() - new Date(getLeadDate(l)));
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     
     return {
-      actId: `ACT-${l.id.toString().padStart(4, '0')}`,
-      leadId: `L-${l.id.toString().padStart(4, '0')}`,
+      actId: `ACT-${l.id.toString().substring(0, 8)}`,
+      leadId: l.id,
       company: l.company,
       contact: l.contact,
       type: actType,
       desc: actDesc,
       owner: l.owner,
-      dueDate: l.estDate,
+      dueDate: getLeadDate(l),
       overdueBy: `${diffDays} Day${diffDays > 1 ? 's' : ''}`,
       diffDays,
       priority: l.priority || 'High',
@@ -235,14 +274,14 @@ export default function Activities() {
     };
   });
 
-  const upcomingActivitiesList = initialLeadsData.filter(l => l.status !== 'Won' && l.status !== 'Lost' && new Date(l.estDate) >= new Date('2026-07-07')).map(l => {
+  const upcomingActivitiesList = leadsList.filter(l => l.status !== 'Won' && l.status !== 'Lost' && getLeadDate(l) && new Date(getLeadDate(l)) >= new Date()).map(l => {
     let actType = 'Call';
     let actDesc = 'Follow-up Call';
     if (l.stage === 'Proposal') { actType = 'Proposal Sent'; actDesc = 'Proposal Review'; }
     if (l.stage === 'Negotiation') { actType = 'Meeting'; actDesc = 'Contract Discussion'; }
     if (l.stage === 'Needs Analysis') { actType = 'Demo'; actDesc = 'Product Walkthrough'; }
 
-    const diffTime = new Date(l.estDate) - new Date('2026-07-07');
+    const diffTime = new Date(getLeadDate(l)) - new Date();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     
     let scheduledDate = 'This Week';
@@ -251,15 +290,15 @@ export default function Activities() {
     else if (diffDays > 7) scheduledDate = 'Next Week';
 
     return {
-      actId: `ACT-${l.id.toString().padStart(4, '0')}`,
-      leadId: `L-${l.id.toString().padStart(4, '0')}`,
+      actId: `ACT-${l.id.toString().substring(0, 8)}`,
+      leadId: l.id,
       company: l.company,
       contact: l.contact,
       type: actType,
       desc: actDesc,
       owner: l.owner,
       scheduledDate,
-      scheduledDateRaw: l.estDate,
+      scheduledDateRaw: getLeadDate(l),
       scheduledTime: '10:00 AM',
       priority: l.priority || 'Normal',
       status: l.status,
@@ -267,10 +306,12 @@ export default function Activities() {
     };
   });
 
-  const uniqueUsers = Array.from(new Set(initialLeadsData.map(l => l.owner))).filter(Boolean).sort();
-  const uniqueLeads = Array.from(new Set(initialLeadsData.map(l => l.company))).filter(Boolean).sort();
-  const uniqueGeos = Array.from(new Set(initialLeadsData.map(l => l.region))).filter(Boolean).sort();
-  const uniqueIndustries = Array.from(new Set(initialLeadsData.map(l => l.industry))).filter(Boolean).sort();
+  const uniqueUsers = usersList.length > 0
+    ? Array.from(new Set(usersList.map(u => u.name))).filter(Boolean).sort()
+    : Array.from(new Set(leadsList.map(l => l.owner))).filter(Boolean).sort();
+  const uniqueLeads = Array.from(new Set(leadsList.map(l => l.contact))).filter(Boolean).sort();
+  const uniqueGeos = ['North America', 'Europe', 'Asia Pacific', 'LATAM', 'India'];
+  const uniqueIndustries = ['Retail', 'Defence', 'Consulting', 'E-commerce', 'Banking', 'Technology', 'Logistics', 'Healthcare', 'Finance', 'IT Services', 'Education', 'Manufacturing', 'Real Estate'];
 
   const pillTypes = [
     { name: 'All', value: 'All Activity Types' },

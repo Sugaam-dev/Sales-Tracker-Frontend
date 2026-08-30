@@ -102,3 +102,51 @@ export async function fetchLeadActivities(id) {
   }
   return data;
 }
+
+export async function createActivity(leadId, payload) {
+  const formattedId = String(leadId).startsWith('L-') ? leadId : `L-${leadId}`;
+  const response = await authenticatedFetch(`${API.LEADS}/${formattedId}/activities`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to create activity.');
+  }
+  return data;
+}
+
+export async function completeActivity(activityId, completed) {
+  const response = await authenticatedFetch(`${API.LEADS.replace('/leads', '')}/activities/${activityId}/complete`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ completed }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to complete activity.');
+  }
+  return data;
+}
+
+export async function bulkCreateLeads(leads) {
+  const response = await authenticatedFetch(`${API.LEADS}/bulk`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ leads }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const details = data.errors ? `: ${typeof data.errors === 'string' ? data.errors : JSON.stringify(data.errors)}` : '';
+    throw new Error((data.message || 'Failed to bulk create leads.') + details);
+  }
+  return data;
+}
+
