@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Upload, X } from 'lucide-react';
-import { fetchLeadActivities } from '../services/leadService';
+import { fetchLeadActivities, createActivity, completeActivity } from '../services/leadService';
 
 // Country codes with flags (emoji flags work universally)
 const COUNTRY_CODES = [
@@ -198,6 +198,13 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
   const [sentiment, setSentiment] = useState(lead?.sentiment || 'select');
   const [value, setValue] = useState(lead?.value || '');
   const [lostReason, setLostReason] = useState(lead?.lostReason || lead?.reason || '');
+  const [linkedinProfileUrl, setLinkedinProfileUrl] = useState(lead?.linkedinProfileUrl || lead?.linkedin?.profile || '');
+  const [linkedinCompanyPageUrl, setLinkedinCompanyPageUrl] = useState(lead?.linkedinCompanyPageUrl || lead?.linkedin?.company || '');
+  const [estimatedRequirementDate, setEstimatedRequirementDate] = useState(lead?.estimatedRequirementDate ? lead.estimatedRequirementDate.substring(0, 10) : '');
+  const [lastContactDate, setLastContactDate] = useState(lead?.lastContactDate ? lead.lastContactDate.substring(0, 10) : '');
+  const [nextFollowUp, setNextFollowUp] = useState(lead?.nextFollowUp ? lead.nextFollowUp.substring(0, 10) : '');
+  const [basicRequirements, setBasicRequirements] = useState(lead?.basicRequirements || lead?.criteria?.requirements || '');
+  const [notes, setNotes] = useState(lead?.notes || '');
 
   // Office phone and Best Time state
   const [officePhone, setOfficePhone] = useState(lead?.officePhone || '');
@@ -277,11 +284,13 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
       fetchLeadActivities(lead.id).then(res => {
         if (res.success && res.data && res.data.length > 0) {
           const fetchedActs = res.data.map(a => ({
-            type: a.type || a.action || 'System Log',
+            id: a.id,
+            type: a.type || 'System Log',
             user: a.user || 'System',
-            time: a.date || a.createdAt || 'Recently',
-            note: a.note || a.action || '',
-            iconClass: (a.type || a.action || '').toLowerCase().includes('email') ? 'email' : ((a.type || a.action || '').toLowerCase().includes('call') ? 'call' : 'system'),
+            time: a.dueDate || a.createdAt || 'Recently',
+            note: a.desc || a.note || '',
+            completed: a.completed,
+            iconClass: (a.type || '').toLowerCase().includes('email') ? 'email' : ((a.type || '').toLowerCase().includes('call') ? 'call' : 'system'),
             iconBg: 'var(--color-primary)'
           }));
           setActivities(fetchedActs);
@@ -341,20 +350,45 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
     }
   };
 
-  const handleLogActivity = (e) => {
+  const handleLogActivity = async (e) => {
     e.preventDefault();
     const type = e.target.elements.type.value;
     const note = e.target.elements.note.value;
-    const newActivity = {
-      type,
-      user: 'You',
-      time: 'Just now',
-      note,
-      iconClass: type.includes('Email') ? 'email' : (type.includes('Call') ? 'call' : 'meeting'),
-      iconBg: 'var(--color-warning)'
-    };
-    setActivities([newActivity, ...activities]);
-    setIsActivityModalOpen(false);
+
+    let apiType = 'Other';
+    if (type.toLowerCase().includes('call')) apiType = 'Call';
+    else if (type.toLowerCase().includes('email')) apiType = 'Email';
+    else if (type.toLowerCase().includes('meeting') || type.toLowerCase().includes('demo')) apiType = 'Demo';
+
+    try {
+      const response = await createActivity(lead.id, {
+        type: apiType,
+        desc: note,
+        outcome: '',
+        dueDate: ''
+      });
+      if (response.success && response.data) {
+        const res = await fetchLeadActivities(lead.id);
+        if (res.success && res.data) {
+          const fetchedActs = res.data.map(a => ({
+            id: a.id,
+            type: a.type || 'System Log',
+            user: 'You',
+            time: a.dueDate || a.createdAt || 'Recently',
+            note: a.desc || a.note || '',
+            completed: a.completed,
+            iconClass: (a.type || '').toLowerCase().includes('email') ? 'email' : ((a.type || '').toLowerCase().includes('call') ? 'call' : 'system'),
+            iconBg: 'var(--color-primary)'
+          }));
+          setActivities(fetchedActs);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to log activity:', err);
+      alert(err.message || 'Failed to log activity.');
+    } finally {
+      setIsActivityModalOpen(false);
+    }
   };
 
   const handleAddPartner = (e) => {
@@ -467,6 +501,13 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
       officePhone,
       officePhoneCountry,
       bestTime,
+      linkedinProfileUrl,
+      linkedinCompanyPageUrl,
+      estimatedRequirementDate,
+      lastContactDate,
+      nextFollowUp,
+      basicRequirements,
+      notes,
       criteria: {
         ...lead?.criteria,
         bestTime
@@ -635,11 +676,11 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
 
               <div className="form-group">
                 <label>LinkedIn Profile URL</label>
-                <input type="text" defaultValue={lead?.linkedin?.profile || ''} />
+                <input type="text" value={linkedinProfileUrl} onChange={(e) => setLinkedinProfileUrl(e.target.value)} />
               </div>
               <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                 <label>LinkedIn Company Page URL</label>
-                <input type="text" defaultValue={lead?.linkedin?.company || ''} />
+                <input type="text" value={linkedinCompanyPageUrl} onChange={(e) => setLinkedinCompanyPageUrl(e.target.value)} />
               </div>
             </div>
           </div>
@@ -684,28 +725,28 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
             <div className="form-grid">
               <div className="form-group">
                 <label>Est. Requirement Date</label>
-                <input type="date" />
+                <input type="date" value={estimatedRequirementDate} onChange={(e) => setEstimatedRequirementDate(e.target.value)} />
               </div>
               <div className="form-group">
                 <label>Last Contact Date</label>
-                <input type="date" defaultValue="2026-06-15" />
+                <input type="date" value={lastContactDate} onChange={(e) => setLastContactDate(e.target.value)} />
               </div>
               <div className="form-group">
                 <label>Next Follow-Up</label>
-                <input type="date" defaultValue="2026-06-20" />
+                <input type="date" value={nextFollowUp} onChange={(e) => setNextFollowUp(e.target.value)} />
               </div>
               <div className="form-group">
                 <label>Created Date</label>
-                <input type="date" defaultValue="2026-06-02" />
+                <input type="date" value={lead?.createdAt ? lead.createdAt.substring(0, 10) : ''} disabled style={{ backgroundColor: '#F1F5F9', color: 'var(--color-text-muted)', cursor: 'not-allowed' }} />
               </div>
             </div>
             <div className="form-group" style={{ marginTop: '20px' }}>
               <label>Basic Requirements <span style={{ color: 'var(--color-danger)' }}>*</span></label>
-              <textarea placeholder="List the core requirements..." defaultValue={lead?.criteria?.requirements || ''} required style={{ minHeight: '60px' }}></textarea>
+              <textarea placeholder="List the core requirements..." value={basicRequirements} onChange={(e) => setBasicRequirements(e.target.value)} required style={{ minHeight: '60px' }}></textarea>
             </div>
             <div className="form-group" style={{ marginTop: '16px' }}>
               <label>Notes</label>
-              <textarea placeholder="Enter notes here..."></textarea>
+              <textarea placeholder="Enter notes here..." value={notes} onChange={(e) => setNotes(e.target.value)} style={{ minHeight: '60px' }}></textarea>
             </div>
 
             <div
@@ -986,10 +1027,46 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
 
             <div className="timeline-items">
               {activities.map((act, i) => (
-                <div key={i} className="timeline-item">
-                  <div className={`timeline-icon ${act.iconClass}`} style={{ width: '12px', height: '12px', minWidth: '12px', minHeight: '12px', border: 'none', background: act.iconBg }}></div>
+                <div key={i} className="timeline-item" style={{ opacity: act.completed ? 0.6 : 1 }}>
+                  <div className={`timeline-icon ${act.iconClass}`} style={{ width: '12px', height: '12px', minWidth: '12px', minHeight: '12px', border: 'none', background: act.completed ? 'var(--color-success)' : act.iconBg }}></div>
                   <div className="timeline-content">
-                    <p style={{ margin: 0, fontWeight: '500' }}>{act.type} <span style={{ color: 'var(--color-text-muted)', fontWeight: 'normal' }}>by {act.user}</span></p>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <p style={{ margin: 0, fontWeight: '500', textDecoration: act.completed ? 'line-through' : 'none' }}>{act.type} <span style={{ color: 'var(--color-text-muted)', fontWeight: 'normal' }}>by {act.user}</span></p>
+                      {act.id && (
+                        <label style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', cursor: act.completed ? 'default' : 'pointer' }}>
+                          <input 
+                            type="checkbox" 
+                            checked={!!act.completed} 
+                            disabled={!!act.completed}
+                            onChange={async () => {
+                              if (!act.completed) {
+                                try {
+                                  await completeActivity(act.id, true);
+                                  const res = await fetchLeadActivities(lead.id);
+                                  if (res.success && res.data) {
+                                    const fetchedActs = res.data.map(a => ({
+                                      id: a.id,
+                                      type: a.type || 'System Log',
+                                      user: 'You',
+                                      time: a.dueDate || a.createdAt || 'Recently',
+                                      note: a.desc || a.note || '',
+                                      completed: a.completed,
+                                      iconClass: (a.type || '').toLowerCase().includes('email') ? 'email' : ((a.type || '').toLowerCase().includes('call') ? 'call' : 'system'),
+                                      iconBg: 'var(--color-primary)'
+                                    }));
+                                    setActivities(fetchedActs);
+                                  }
+                                } catch (err) {
+                                  console.error('Failed to complete activity:', err);
+                                  alert(err.message || 'Failed to complete activity.');
+                                }
+                              }
+                            }}
+                          />
+                          <span>{act.completed ? 'Done' : 'Complete'}</span>
+                        </label>
+                      )}
+                    </div>
                     <span className="timeline-date">{act.time}</span>
                     <div style={{ background: '#F1F5F9', padding: '8px 12px', borderRadius: '4px', marginTop: '8px', fontSize: '12px' }}>
                       {act.note}
