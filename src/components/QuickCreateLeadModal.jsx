@@ -173,10 +173,14 @@ export default function QuickCreateLeadModal({
                 required
               >
                 <option value="">Select...</option>
+                <option>Open</option>
                 <option>New</option>
                 <option>Contacted</option>
+                <option>Analysis</option>
                 <option>Interested</option>
                 <option>Negotiation</option>
+                <option>Won</option>
+                <option>Lost</option>
               </select>
             </div>
 

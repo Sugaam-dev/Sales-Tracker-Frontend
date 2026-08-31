@@ -93,3 +93,128 @@
     flex-direction: column;
   }
 }
+
+/* Custom Interactive Modal for Import Results */
+.import-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.import-modal-card {
+  background-color: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+  width: 90%;
+  max-width: 550px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-border);
+}
+
+.import-modal-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.import-modal-header h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--color-text-main);
+}
+
+.import-modal-body {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.import-summary-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.stat-item {
+  padding: 16px;
+  border-radius: var(--radius-md);
+  text-align: center;
+  background-color: var(--color-background);
+  border: 1px solid var(--color-border);
+}
+
+.stat-item.created {
+  border-color: rgba(16, 185, 129, 0.3);
+  background-color: rgba(16, 185, 129, 0.05);
+}
+
+.stat-item.failed {
+  border-color: rgba(239, 68, 68, 0.3);
+  background-color: rgba(239, 68, 68, 0.05);
+}
+
+.stat-val {
+  font-size: 1.75rem;
+  font-weight: 700;
+  display: block;
+}
+
+.stat-val.created { color: var(--color-success); }
+.stat-val.failed { color: var(--color-danger); }
+
+.stat-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+}
+
+.error-details-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 250px;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  background-color: var(--color-background);
+}
+
+.error-details-list li {
+  font-size: 0.815rem;
+  color: var(--color-danger);
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--color-border);
+  text-align: left;
+}
+
+.error-details-list li:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.import-modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}

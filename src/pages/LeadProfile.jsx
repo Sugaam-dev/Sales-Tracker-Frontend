@@ -520,7 +520,7 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
     <div className="lead-profile-view">
       <div className="profile-header">
         <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', margin: 0 }}>
-          {isExistingLead ? `Lead Profile: L-${(lead.id).toString().padStart(4, '0')}` : 'Create New Lead'}
+          {isExistingLead ? `Lead Profile: ${String(lead.id).startsWith('L-') ? lead.id : `L-${String(lead.id).padStart(4, '0')}`}` : 'Create New Lead'}
         </h2>
         <div className="profile-actions">
           {isEditMode && (

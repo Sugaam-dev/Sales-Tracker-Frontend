@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { UploadCloud, FileSpreadsheet, Download, CheckCircle2 } from 'lucide-react';
+import { UploadCloud, FileSpreadsheet, Download, CheckCircle2, X } from 'lucide-react';
 import './Import.css';
 import { bulkCreateLeads, fetchCurrentUsers } from '../services/leadService';
 
@@ -8,6 +8,13 @@ export default function Import() {
   const [file, setFile] = useState(null);
   const [isImporting, setIsImporting] = useState(false);
   const [usersList, setUsersList] = useState([]);
+  
+  // Custom Result Modal States
+  const [showResultModal, setShowResultModal] = useState(false);
+  const [importSummary, setImportSummary] = useState(null);
+  const [failedRows, setFailedRows] = useState([]);
+  const [importError, setImportError] = useState('');
+
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -312,21 +319,38 @@ export default function Import() {
         });
 
         const response = await bulkCreateLeads(parsedLeads);
-        if (response.success || (response.summary && response.summary.created > 0)) {
-          const summary = response.summary || {};
-          alert(`Import completed!\nCreated: ${summary.created}\nFailed: ${summary.failed}`);
-          window.location.href = '/leads';
+        if (response.success || (response.summary && (response.summary.created > 0 || response.summary.failed > 0))) {
+          const summary = response.summary || { created: 0, failed: 0, total: parsedLeads.length };
+          setImportSummary(summary);
+          setFailedRows(response.failed || []);
+          setImportError('');
+          setShowResultModal(true);
+          setFile(null);
         } else {
-          alert('Failed to import leads.');
+          setImportError('Failed to import leads. The server did not process any items.');
+          setImportSummary(null);
+          setFailedRows([]);
+          setShowResultModal(true);
         }
       } catch (err) {
         console.error('Import failed:', err);
-        alert('Failed to import leads: ' + err.message);
+        setImportError(err.message || 'Failed to import leads.');
+        setImportSummary(null);
+        setFailedRows([]);
+        setShowResultModal(true);
       } finally {
         setIsImporting(false);
       }
     };
     reader.readAsText(file);
+  };
+
+  const handleCloseModal = () => {
+    setShowResultModal(false);
+    // If successfully imported some leads, redirect to leads page
+    if (importSummary && importSummary.created > 0) {
+      window.location.href = '/leads';
+    }
   };
 
   return (
@@ -397,6 +421,69 @@ export default function Import() {
           </ul>
         </div>
       </div>
+
+      {/* Interactive Result Modal Overlay */}
+      {showResultModal && (
+        <div className="import-modal-overlay">
+          <div className="import-modal-card">
+            <div className="import-modal-header">
+              <h3>Import Leads Summary</h3>
+              <button className="close-btn" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted)' }} onClick={handleCloseModal}>
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="import-modal-body">
+              {importError ? (
+                <div style={{ color: 'var(--color-danger)', marginBottom: '16px', fontWeight: '500' }}>
+                  ❌ {importError}
+                </div>
+              ) : (
+                <>
+                  <div className="import-summary-stats">
+                    <div className="stat-item">
+                      <span className="stat-val">{importSummary?.total || 0}</span>
+                      <span className="stat-label">Total Rows</span>
+                    </div>
+                    <div className="stat-item created">
+                      <span className="stat-val created">{importSummary?.created || 0}</span>
+                      <span className="stat-label">Created</span>
+                    </div>
+                    <div className="stat-item failed">
+                      <span className="stat-val failed">{importSummary?.failed || 0}</span>
+                      <span className="stat-label">Failed</span>
+                    </div>
+                  </div>
+
+                  {failedRows.length > 0 && (
+                    <div>
+                      <h4 style={{ marginBottom: '8px', fontSize: '0.9rem', fontWeight: '600' }}>Failed Rows Detail:</h4>
+                      <ul className="error-details-list">
+                        {failedRows.map((item, idx) => {
+                          const errString = typeof item.errors === 'string' 
+                            ? item.errors 
+                            : JSON.stringify(item.errors);
+                          return (
+                            <li key={idx}>
+                              <strong>Row {item.index + 2} ({item.company || 'Unknown Company'}):</strong> {errString}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div className="import-modal-footer">
+              <button className="btn-primary" onClick={handleCloseModal}>
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
