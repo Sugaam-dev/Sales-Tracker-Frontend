@@ -492,6 +492,8 @@ export default function Leads() {
                 company: updatedData.company || undefined,
                 projectName: updatedData.projectName || undefined,
                 designation: updatedData.designation || undefined,
+                productService: updatedData.productService || undefined,
+                requestType: updatedData.requestType || undefined,
                 contact: updatedData.contact || undefined,
                 email: updatedData.email || undefined,
                 phone: updatedData.phone || undefined,

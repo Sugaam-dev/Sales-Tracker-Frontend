@@ -87,7 +87,8 @@ export default function Header() {
         sentiment: 'Neutral',
         priority: data.priority === 'Medium' ? 'Normal' : data.priority,
         kamName: data.leadName,
-        basicRequirements: data.productService ? `${data.requestType}: ${data.productService}` : 'Quick created lead',
+        productService: data.productService || '',
+        requestType: data.requestType || '',
         estimatedRequirementDate: data.estDate || '',
       };
       await createLead(payload);

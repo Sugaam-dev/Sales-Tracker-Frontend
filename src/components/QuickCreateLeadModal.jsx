@@ -10,6 +10,9 @@ export default function QuickCreateLeadModal({
 }) {
   const dialogRef = useRef(null);
   const [users, setUsers] = useState([]);
+  const [phoneError, setPhoneError] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [countryCode, setCountryCode] = useState('IN +91');
 
   useEffect(() => {
     if (isOpen) {
@@ -29,6 +32,30 @@ export default function QuickCreateLeadModal({
     e.preventDefault();
     const formData = new FormData(e.target);
     const data = Object.fromEntries(formData.entries());
+
+    let isValid = true;
+    
+    // Validate Phone (10 digits)
+    const strippedPhone = String(data.phone).replace(/\D/g, '');
+    if (strippedPhone.length !== 10) {
+      setPhoneError('Contact Number must be exactly 10 digits.');
+      isValid = false;
+    } else {
+      setPhoneError('');
+    }
+
+    // Validate Email
+    if (!data.email.toLowerCase().endsWith('.com')) {
+      setEmailError('Email must end with .com');
+      isValid = false;
+    } else {
+      setEmailError('');
+    }
+
+    if (!isValid) return;
+
+    // Attach country code to data
+    data.countryCode = countryCode;
     onCreate(data);
   };
 
@@ -82,11 +109,32 @@ export default function QuickCreateLeadModal({
               <label>
                 Contact Number <span className="required">*</span>
               </label>
-              <input
-                type="tel"
-                name="phone"
-                required
-              />
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <select 
+                  name="countryCode" 
+                  value={countryCode} 
+                  onChange={e => setCountryCode(e.target.value)}
+                  style={{ width: '100px', flexShrink: 0 }}
+                >
+                  <option value="IN +91">IN +91</option>
+                  <option value="US +1">US +1</option>
+                  <option value="UK +44">UK +44</option>
+                  <option value="AE +971">AE +971</option>
+                  <option value="SG +65">SG +65</option>
+                </select>
+                <input
+                  type="tel"
+                  name="phone"
+                  required
+                  maxLength="10"
+                  minLength="10"
+                  pattern="\d{10}"
+                  title="Phone number must be exactly 10 digits"
+                  style={{ flex: 1 }}
+                  onInput={(e) => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 10); }}
+                />
+              </div>
+              {phoneError && <span style={{ color: 'var(--color-danger)', fontSize: '12px', marginTop: '4px', display: 'block' }}>{phoneError}</span>}
             </div>
 
             <div className="form-group">
@@ -98,6 +146,7 @@ export default function QuickCreateLeadModal({
                 name="email"
                 required
               />
+              {emailError && <span style={{ color: 'var(--color-danger)', fontSize: '12px', marginTop: '4px', display: 'block' }}>{emailError}</span>}
             </div>
 
             <div className="form-group">
@@ -186,12 +235,11 @@ export default function QuickCreateLeadModal({
 
             <div className="form-group">
               <label>
-                Estimated Req. Date <span className="required">*</span>
+                Estimated Req. Date
               </label>
               <input
                 type="date"
                 name="estDate"
-                required
               />
             </div>
           </div>
