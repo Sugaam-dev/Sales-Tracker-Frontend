@@ -74,8 +74,8 @@ function validatePhone(number) {
 
 function validateEmail(val) {
   if (!val) return { valid: false, message: 'Email is required.' };
-  const isValid = val.endsWith('@gmail.com') || val.endsWith('@.gmail.com');
-  if (!isValid) return { valid: false, message: 'Email must end with @gmail.com or @.gmail.com' };
+  const isValid = val.toLowerCase().endsWith('.com');
+  if (!isValid) return { valid: false, message: 'Email must end with .com' };
   return { valid: true, message: '' };
 }
 
@@ -150,6 +150,10 @@ function PhoneInput({ label, required, value, onChange, countryCode, onCountryCo
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder="e.g. 98765 43210"
+          maxLength="10"
+          minLength="10"
+          pattern="\d{10}"
+          onInput={(e) => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 10); }}
           style={{
             flex: 1,
             border: 'none',
@@ -187,6 +191,8 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
   
   // Controlled fields state
   const [company, setCompany] = useState(lead?.company || '');
+  const [productService, setProductService] = useState(lead?.productService || '');
+  const [requestType, setRequestType] = useState(lead?.requestType || 'select');
   const [industry, setIndustry] = useState(lead?.industry || 'select');
   const [size, setSize] = useState(lead?.size || 'select');
   const [region, setRegion] = useState(lead?.region || 'select');
@@ -220,6 +226,9 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
 
   // Dropdown error states
   const [contactError, setContactError] = useState('');
+  const [companyError, setCompanyError] = useState('');
+  const [productServiceError, setProductServiceError] = useState('');
+  const [requestTypeError, setRequestTypeError] = useState('');
   const [ownerError, setOwnerError] = useState('');
   const [industryError, setIndustryError] = useState('');
   const [sizeError, setSizeError] = useState('');
@@ -430,6 +439,10 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
   };
 
   const validateOfficePhone = (val) => {
+    if (!val || val.trim() === '') {
+      setOfficePhoneError('');
+      return true;
+    }
     const pv = validatePhone(val);
     const msg = pv.message ? pv.message.replace('Phone number', 'Office Phone Number') : '';
     setOfficePhoneError(msg);
@@ -460,21 +473,47 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
       setContactError('');
     }
 
+    let hasCompanyError = false;
+    if (!company || !company.trim()) {
+      setCompanyError('Company Name is required');
+      hasCompanyError = true;
+    } else {
+      setCompanyError('');
+    }
+
+    let hasProductServiceError = false;
+    if (!productService || !productService.trim()) {
+      setProductServiceError('Product/Service is required');
+      hasProductServiceError = true;
+    } else {
+      setProductServiceError('');
+    }
+
+    let hasRequestTypeError = false;
+    if (!requestType || requestType === 'select') {
+      setRequestTypeError('Request Type is required');
+      hasRequestTypeError = true;
+    } else {
+      setRequestTypeError('');
+    }
+
     let hasSelectErrors = false;
     if (owner === 'select') { setOwnerError('Lead Owner is required'); hasSelectErrors = true; } else { setOwnerError(''); }
-    if (industry === 'select') { setIndustryError('Industry is required'); hasSelectErrors = true; } else { setIndustryError(''); }
-    if (size === 'select') { setSizeError('Company Size is required'); hasSelectErrors = true; } else { setSizeError(''); }
-    if (region === 'select') { setRegionError('Region is required'); hasSelectErrors = true; } else { setRegionError(''); }
-    if (source === 'select') { setSourceError('Lead Source is required'); hasSelectErrors = true; } else { setSourceError(''); }
     if (priority === 'select') { setPriorityError('Priority is required'); hasSelectErrors = true; } else { setPriorityError(''); }
     if (status === 'select') { setStatusError('Status is required'); hasSelectErrors = true; } else { setStatusError(''); }
-    if (stage === 'select') { setStageError('Stage is required'); hasSelectErrors = true; } else { setStageError(''); }
-    if (sentiment === 'select') { setSentimentError('Sentiment is required'); hasSelectErrors = true; } else { setSentimentError(''); }
+    
+    // Non-mandatory fields simply clear their errors
+    setIndustryError('');
+    setSizeError('');
+    setRegionError('');
+    setSourceError('');
+    setStageError('');
+    setSentimentError('');
     
     // Best Time to Connect is optional
     setBestTimeError('');
 
-    if (!pv.valid || !av.valid || !ev.valid || !isOfficePhoneValid || hasSelectErrors || hasContactError) {
+    if (!pv.valid || !av.valid || !ev.valid || !isOfficePhoneValid || hasSelectErrors || hasContactError || hasCompanyError || hasProductServiceError || hasRequestTypeError) {
       return;
     }
 
@@ -485,6 +524,8 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
       industry,
       size,
       region,
+      productService,
+      requestType,
       contact,
       status,
       stage,
@@ -543,11 +584,26 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
             <div className="form-grid">
               <div className="form-group">
                 <label>Company Name <span style={{ color: 'var(--color-danger)' }}>*</span></label>
-                <input type="text" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="e.g. Acme Corp" required />
+                <input type="text" value={company} onChange={(e) => { setCompany(e.target.value); setCompanyError(''); }} placeholder="e.g. Acme Corp" required />
+                {companyError && <p style={{ margin: '4px 0 0', fontSize: '11px', color: 'var(--color-danger)' }}>{companyError}</p>}
               </div>
               <div className="form-group">
-                <label>Project Name <span style={{ color: 'var(--color-danger)' }}>*</span></label>
-                <input type="text" value={projectName} onChange={(e) => setProjectName(e.target.value)} placeholder="e.g. Horizon Retail Omnichannel Commerce Transformation" required />
+                <label>Project Name</label>
+                <input type="text" value={projectName} onChange={(e) => setProjectName(e.target.value)} placeholder="e.g. Horizon Retail Omnichannel Commerce Transform" />
+              </div>
+              <div className="form-group">
+                <label>Product / Service <span style={{ color: 'var(--color-danger)' }}>*</span></label>
+                <input type="text" value={productService} onChange={(e) => { setProductService(e.target.value); setProductServiceError(''); }} placeholder="e.g. CRM Software" required />
+                {productServiceError && <p style={{ margin: '4px 0 0', fontSize: '11px', color: 'var(--color-danger)' }}>{productServiceError}</p>}
+              </div>
+              <div className="form-group">
+                <label>Request Type <span style={{ color: 'var(--color-danger)' }}>*</span></label>
+                <select value={requestType} onChange={(e) => { setRequestType(e.target.value); setRequestTypeError(''); }} required>
+                  <option value="select">Select Request Type</option>
+                  <option>Product Request</option>
+                  <option>Service Request</option>
+                </select>
+                {requestTypeError && <p style={{ margin: '4px 0 0', fontSize: '11px', color: 'var(--color-danger)' }}>{requestTypeError}</p>}
               </div>
               <div onBlur={handleOfficePhoneBlur}>
                 <PhoneInput
@@ -561,7 +617,7 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
                 />
               </div>
               <div className="form-group">
-                <label>Industry <span style={{ color: 'var(--color-danger)' }}>*</span></label>
+                <label>Industry</label>
                 <select value={industry} onChange={(e) => { setIndustry(e.target.value); setIndustryError(''); }}>
                   <option value="select">Select Industry</option>
                   <option>Retail</option> 
@@ -581,7 +637,7 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
                 {industryError && <p style={{ margin: '4px 0 0', fontSize: '11px', color: 'var(--color-danger)' }}>{industryError}</p>}
               </div>
               <div className="form-group">
-                <label>Company Size <span style={{ color: 'var(--color-danger)' }}>*</span></label>
+                <label>Company Size</label>
                 <select value={size} onChange={(e) => { setSize(e.target.value); setSizeError(''); }}>
                   <option value="select">Select Company Size</option>
                   <option>1-10 Employees</option>
@@ -592,7 +648,7 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
                 {sizeError && <p style={{ margin: '4px 0 0', fontSize: '11px', color: 'var(--color-danger)' }}>{sizeError}</p>}
               </div>
               <div className="form-group">
-                <label>Region <span style={{ color: 'var(--color-danger)' }}>*</span></label>
+                <label>Region</label>
                 <select value={region} onChange={(e) => { setRegion(e.target.value); setRegionError(''); }}>
                   <option value="select">Select Region</option>
                   <option>North America</option>
@@ -741,8 +797,8 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
               </div>
             </div>
             <div className="form-group" style={{ marginTop: '20px' }}>
-              <label>Basic Requirements <span style={{ color: 'var(--color-danger)' }}>*</span></label>
-              <textarea placeholder="List the core requirements..." value={basicRequirements} onChange={(e) => setBasicRequirements(e.target.value)} required style={{ minHeight: '60px' }}></textarea>
+              <label>Basic Requirements</label>
+              <textarea placeholder="List the core requirements..." value={basicRequirements} onChange={(e) => setBasicRequirements(e.target.value)} style={{ minHeight: '60px' }}></textarea>
             </div>
             <div className="form-group" style={{ marginTop: '16px' }}>
               <label>Notes</label>
@@ -759,7 +815,7 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
               {selectedFile ? (
                 <p style={{ color: 'var(--color-primary)', fontWeight: '500' }}>Selected: {selectedFile}</p>
               ) : (
-                <p>Drag &amp; Drop Requirement Documents, Quotations, or Contracts <span style={{ color: 'var(--color-danger)' }}>*</span><br /><span style={{ fontSize: '12px', color: 'var(--color-primary)', textDecoration: 'underline' }}>Choose Files</span></p>
+                <p>Drag &amp; Drop Requirement Documents, Quotations, or Contracts<br /><span style={{ fontSize: '12px', color: 'var(--color-primary)', textDecoration: 'underline' }}>Choose Files</span></p>
               )}
             </div>
           </div>
@@ -832,7 +888,7 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
               </div>
             )}
             <div className="form-group" style={{ marginBottom: '16px' }}>
-              <label>Stage <span style={{ color: 'var(--color-danger)' }}>*</span></label>
+              <label>Stage</label>
               <select value={stage} disabled style={{ backgroundColor: '#F1F5F9', color: 'var(--color-text-muted)', cursor: 'not-allowed' }}>
                 <option value="select">Select Stage</option>
                 {stagesList && stagesList.length > 0 ? (
@@ -859,7 +915,7 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
               {priorityError && <p style={{ margin: '4px 0 0', fontSize: '11px', color: 'var(--color-danger)' }}>{priorityError}</p>}
             </div>
             <div className="form-group" style={{ marginBottom: '16px' }}>
-              <label>Lead Source <span style={{ color: 'var(--color-danger)' }}>*</span></label>
+              <label>Lead Source</label>
               <select value={source} onChange={(e) => { setSource(e.target.value); setSourceError(''); }}>
                 <option value="select">Select Lead Source</option>
                 <option>Website</option>
@@ -870,7 +926,7 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
               {sourceError && <p style={{ margin: '4px 0 0', fontSize: '11px', color: 'var(--color-danger)' }}>{sourceError}</p>}
             </div>
             <div className="form-group">
-              <label>Sentiment <span style={{ color: 'var(--color-danger)' }}>*</span></label>
+              <label>Sentiment</label>
               <select value={sentiment} onChange={(e) => { setSentiment(e.target.value); setSentimentError(''); }}>
                 <option value="select">Select Sentiment</option>
                 <option>Positive</option>
