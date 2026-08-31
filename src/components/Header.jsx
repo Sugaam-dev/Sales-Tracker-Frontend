@@ -63,6 +63,18 @@ export default function Header() {
     setIsModalOpen(false);
     try {
       const cleanPhone = String(data.phone).replace(/[^0-9]/g, '').slice(0, 10);
+      let statusPayload = 'Open';
+      const lowercaseStatus = String(data.status).toLowerCase();
+      if (['open', 'new', 'contacted', 'interested', 'negotiation'].includes(lowercaseStatus)) {
+        statusPayload = 'Open';
+      } else if (lowercaseStatus === 'in progress' || lowercaseStatus === 'analysis') {
+        statusPayload = 'In Progress';
+      } else if (lowercaseStatus === 'won' || lowercaseStatus === 'closed won') {
+        statusPayload = 'Won';
+      } else if (lowercaseStatus === 'lost' || lowercaseStatus === 'closed lost') {
+        statusPayload = 'Lost';
+      }
+
       const payload = {
         company: data.companyName,
         contact: data.leadName,
@@ -71,9 +83,12 @@ export default function Header() {
         officePhone: cleanPhone,
         owner: data.owner,
         stage: 'Qualification',
-        status: data.status,
+        status: statusPayload,
         sentiment: 'Neutral',
         priority: data.priority === 'Medium' ? 'Normal' : data.priority,
+        kamName: data.leadName,
+        basicRequirements: data.productService ? `${data.requestType}: ${data.productService}` : 'Quick created lead',
+        estimatedRequirementDate: data.estDate || '',
       };
       await createLead(payload);
       setToastMessage('Lead created - Added to pipeline');
