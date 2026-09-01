@@ -89,6 +89,7 @@ export default function Header() {
         kamName: data.leadName,
         productService: data.productService || '',
         requestType: data.requestType || '',
+        basicRequirements: data.productService ? `${data.requestType}: ${data.productService}` : 'Quick created lead',
         estimatedRequirementDate: data.estDate || '',
       };
       await createLead(payload);
@@ -104,8 +105,8 @@ export default function Header() {
     } catch (err) {
       console.error('Quick Create Error:', err);
       // Extract exact validation error from backend response if available
-      const errorDetail = err.response?.data?.error || err.response?.data?.message || err.message;
-      alert(`Failed to quick create lead: ${errorDetail}`);
+      const fullError = err.response?.data ? JSON.stringify(err.response.data) : err.message;
+      alert(`Failed to quick create lead: ${fullError}`);
     }
   };
 
