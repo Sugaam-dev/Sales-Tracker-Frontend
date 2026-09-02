@@ -244,7 +244,11 @@
 }
 
 .estimation-table td.role-column {
-  min-width: 180px;
+  min-width: 240px;
+}
+
+.estimation-table td.expense-type-column {
+  min-width: 200px;
 }
 
 .estimation-table td.grade-column {
