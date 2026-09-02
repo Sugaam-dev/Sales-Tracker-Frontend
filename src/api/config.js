@@ -21,6 +21,7 @@ export const API = {
   SEND_EMAIL: `${BASE_URL}/email/send`,
   CURRENT_USERS: `${BASE_URL}/current_users/`,
   LEADS: `${BASE_URL}/leads`,
+  COMMERCIAL: (leadId) => `${BASE_URL}/leads/${leadId}/commercial`,
 };
 
 export const authHeaders = () => {
