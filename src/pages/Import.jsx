@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { UploadCloud, FileSpreadsheet, Download, CheckCircle2, X } from 'lucide-react';
 import './Import.css';
 import { bulkCreateLeads, fetchCurrentUsers } from '../services/leadService';
@@ -37,7 +37,8 @@ export default function Import() {
     'Sentiment',
     'Priority',
     'KAM Name',
-    'Basic Requirements'
+    'Request Type',
+    'Request Details'
   ];
 
   // Map of snake_case or human headers to target CreateLeadRequest fields
@@ -117,6 +118,12 @@ export default function Import() {
     'next_follow_up': 'nextFollowUp',
     'nextFollowUp': 'nextFollowUp',
     'Next Follow-Up': 'nextFollowUp',
+    'request_type': 'requestType',
+    'Request Type': 'requestType',
+    'requestType': 'requestType',
+    'request_details': 'requestDetails',
+    'Request Details': 'requestDetails',
+    'requestDetails': 'requestDetails',
     'basic_requirements': 'basicRequirements',
     'basicRequirements': 'basicRequirements',
     'Basic Requirements': 'basicRequirements',
@@ -153,8 +160,20 @@ export default function Import() {
     return clean;
   };
 
+  const normalizeKey = (key) => {
+    const trimmed = (key || '').trim().replace(/^"|"$/g, '');
+    if (headerMap[trimmed]) return headerMap[trimmed];
+    const canonical = trimmed.toLowerCase().replace(/[\s-]+/g, '_');
+    if (headerMap[canonical]) return headerMap[canonical];
+    if (canonical === 'request_type' || canonical === 'requesttype') return 'requestType';
+    if (canonical === 'request_details' || canonical === 'requestdetails' || canonical === 'requirement_details') return 'requestDetails';
+    if (canonical === 'basic_requirements' || canonical === 'basicrequirements') return 'basicRequirements';
+    return trimmed;
+  };
+
   const parseCSV = (text) => {
-    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    const cleanText = text.replace(/^\uFEFF/, '');
+    const lines = cleanText.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
     if (lines.length < 2) return [];
 
     const parseRow = (row) => {
@@ -176,7 +195,7 @@ export default function Import() {
       return result.map(v => v.replace(/^"|"$/g, ''));
     };
 
-    const headers = parseRow(lines[0]);
+    const headers = parseRow(lines[0]).map(h => h.trim());
     const rows = [];
     for (let i = 1; i < lines.length; i++) {
       const values = parseRow(lines[i]);
@@ -225,13 +244,13 @@ export default function Import() {
       'company_name', 'project_name', 'office_phone_number', 'industry', 'company_size', 'region', 
       'kam_name', 'designation', 'email', 'phone', 'best_time_to_connect', 'alternate_phone', 
       'linkedin_profile_url', 'linkedin_company_page_url', 'est_requirement_date', 'last_contact_date', 
-      'next_follow_up', 'basic_requirements', 'notes', 'lead_owner', 'lifecycle_template', 'status', 
+      'next_follow_up', 'request_type', 'request_details', 'notes', 'lead_owner', 'lifecycle_template', 'status', 
       'stage', 'priority', 'lead_source', 'sentiment'
     ];
     const sampleData = [
       headers.join(','),
-      `"Acme Technologies","CRM Transformation Project","9876543210","Information Technology","Large","India","John Doe","VP of Sales","john.doe@gmail.com","9876543211","Morning","9876543212","https://www.linkedin.com/in/johndoe","https://www.linkedin.com/company/acme-technologies","15-09-2026","28-08-2026","05-09-2026","CRM implementation and sales automation","Interested in enterprise CRM solution.","User","Enterprise Sales","Open","Prospecting","High","Website","Positive"`,
-      `"Horizon Retail","Omnichannel Commerce Transformation","9876543220","Retail","Enterprise","India","Sarah Jenkins","Director","sarah.jenkins@gmail.com","9876543221","Afternoon","9876543222","https://www.linkedin.com/in/sarahjenkins","https://www.linkedin.com/company/horizon-retail","20-09-2026","27-08-2026","03-09-2026","Omnichannel sales and customer management","Requested product demonstration.","User","Enterprise Sales","Open","Qualification","High","Referral","Positive"`
+      `"Acme Technologies","CRM Transformation Project","9876543210","Information Technology","Large","India","John Doe","VP of Sales","john.doe@gmail.com","9876543211","Morning","9876543212","https://www.linkedin.com/in/johndoe","https://www.linkedin.com/company/acme-technologies","15-09-2026","28-08-2026","05-09-2026","IT Product","Client is requesting a full-featured CRM platform for lead tracking and enterprise pipeline analytics. The deployment must integrate seamlessly with existing sales tools and support automated workflow triggers.","Interested in enterprise CRM solution.","User","Enterprise Sales","Open","Prospecting","High","Website","Positive"`,
+      `"Horizon Retail","Omnichannel Commerce Transformation","9876543220","Retail","Enterprise","India","Sarah Jenkins","Director","sarah.jenkins@gmail.com","9876543221","Afternoon","9876543222","https://www.linkedin.com/in/sarahjenkins","https://www.linkedin.com/company/horizon-retail","20-09-2026","27-08-2026","03-09-2026","IT Service","Customer requires specialized implementation services for retail omnichannel integrations across multiple regional warehouses. The project involves legacy database migration and ongoing operational support.","Requested product demonstration.","User","Enterprise Sales","Open","Qualification","High","Referral","Positive"`
     ].join('\n');
 
     const blob = new Blob([sampleData], { type: 'text/csv;charset=utf-8;' });
@@ -254,26 +273,76 @@ export default function Import() {
         const text = event.target.result;
         const rawRows = parseCSV(text);
 
-        const parsedLeads = rawRows.map(row => {
+        if (rawRows.length === 0) {
+          setImportError('The uploaded CSV file contains no data rows.');
+          setImportSummary(null);
+          setFailedRows([]);
+          setShowResultModal(true);
+          return;
+        }
+
+        const preValidationFailed = [];
+
+        const parsedLeads = rawRows.map((row, index) => {
+          const rowNum = index + 2; // Line 1 is header, 0-indexed data starts at Line 2
           const mapped = {};
           Object.keys(row).forEach(key => {
-            const mappedKey = headerMap[key] || key;
+            const mappedKey = normalizeKey(key);
             mapped[mappedKey] = row[key];
           });
 
-          // 1. Sanitize phone numbers
+          // Support legacy basic_requirements if request_details is not provided
+          if (!mapped.requestDetails && mapped.basicRequirements) {
+            mapped.requestDetails = mapped.basicRequirements;
+          }
+          if (mapped.requestDetails) {
+            mapped.basicRequirements = mapped.requestDetails;
+          }
+
+          const rowErrors = [];
+
+          // 1. Mandatory Request Type Validation
+          const rawRequestType = (mapped.requestType || '').trim();
+          if (!rawRequestType) {
+            rowErrors.push("Request Type is required (must be 'IT Product' or 'IT Service').");
+          } else if (rawRequestType.toLowerCase() === 'it product') {
+            mapped.requestType = 'IT Product';
+          } else if (rawRequestType.toLowerCase() === 'it service') {
+            mapped.requestType = 'IT Service';
+          } else {
+            rowErrors.push(`Request Type must be 'IT Product' or 'IT Service' (received "${rawRequestType}").`);
+          }
+
+          // 2. Mandatory Request Details Validation (non-empty)
+          const rawRequestDetails = (mapped.requestDetails || '').trim();
+          if (!rawRequestDetails) {
+            rowErrors.push("Request Details is required.");
+          } else {
+            mapped.requestDetails = rawRequestDetails;
+            mapped.basicRequirements = rawRequestDetails;
+          }
+
+          if (rowErrors.length > 0) {
+            preValidationFailed.push({
+              index,
+              company: mapped.company || `Row ${rowNum}`,
+              errors: rowErrors.join(' ')
+            });
+          }
+
+          // 3. Sanitize phone numbers
           mapped.phone = sanitizePhone(mapped.phone);
           mapped.officePhone = sanitizePhone(mapped.officePhone);
           if (mapped.alternatePhone) {
             mapped.alternatePhone = sanitizePhone(mapped.alternatePhone);
           }
 
-          // 2. Format dates
+          // 4. Format dates
           if (mapped.estimatedRequirementDate) mapped.estimatedRequirementDate = sanitizeDate(mapped.estimatedRequirementDate);
           if (mapped.lastContactDate) mapped.lastContactDate = sanitizeDate(mapped.lastContactDate);
           if (mapped.nextFollowUp) mapped.nextFollowUp = sanitizeDate(mapped.nextFollowUp);
 
-          // 3. Normalize single-value constraints
+          // 5. Normalize single-value constraints
           let statusVal = String(mapped.status || 'Open').trim();
           if (statusVal.toLowerCase() === 'open') statusVal = 'Open';
           else if (statusVal.toLowerCase() === 'in progress' || statusVal.toLowerCase() === 'new') statusVal = 'Open';
@@ -295,7 +364,7 @@ export default function Import() {
           else if (sentimentVal.toLowerCase() === 'negative') sentimentVal = 'Negative';
           mapped.sentiment = sentimentVal;
 
-          // 4. Map owner to active user
+          // 6. Map owner to active user
           let ownerVal = String(mapped.owner || '').trim();
           const matchedUser = usersList.find(u => 
             u.name.toLowerCase() === ownerVal.toLowerCase() || 
@@ -308,7 +377,7 @@ export default function Import() {
             mapped.owner = usersList[0].name;
           }
 
-          // 5. Ensure contact is set
+          // 7. Ensure contact is set
           if (!mapped.contact && mapped.kamName) {
             mapped.contact = mapped.kamName;
           } else if (!mapped.kamName && mapped.contact) {
@@ -317,6 +386,19 @@ export default function Import() {
 
           return mapped;
         });
+
+        // If any rows failed pre-validation, halt and display exact row errors
+        if (preValidationFailed.length > 0) {
+          setImportError('');
+          setImportSummary({
+            total: rawRows.length,
+            created: 0,
+            failed: preValidationFailed.length
+          });
+          setFailedRows(preValidationFailed);
+          setShowResultModal(true);
+          return;
+        }
 
         const response = await bulkCreateLeads(parsedLeads);
         if (response.success || (response.summary && (response.summary.created > 0 || response.summary.failed > 0))) {
