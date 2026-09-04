@@ -150,6 +150,31 @@ export async function bulkCreateLeads(leads) {
   return data;
 }
 
+export async function fetchActivitiesFeed(queryParams = {}) {
+  const params = new URLSearchParams();
+  Object.keys(queryParams).forEach((key) => {
+    const val = queryParams[key];
+    if (val !== undefined && val !== null && val !== '' && val !== 'All' && !String(val).startsWith('All ')) {
+      // Map camelCase to backend snake_case parameters if necessary
+      if (key === 'dealSize') {
+        params.append('deal_size', val);
+      } else if (key === 'leadId') {
+        params.append('lead_id', val);
+      } else if (key === 'userId') {
+        params.append('user_id', val);
+      } else if (key === 'dueStatus') {
+        params.append('due_status', val);
+      } else {
+        params.append(key, val);
+      }
+    }
+  });
+  const query = params.toString();
+  const url = query ? `${API.ACTIVITIES}?${query}` : API.ACTIVITIES;
+  const response = await authenticatedFetch(url);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to fetch activities feed.');
 export async function fetchDashboardSummary(queryParams = {}) {
   const params = new URLSearchParams();
   Object.keys(queryParams).forEach((key) => {
@@ -169,6 +194,27 @@ export async function fetchDashboardSummary(queryParams = {}) {
   return data;
 }
 
+export async function logGlobalActivity(payload) {
+  const response = await authenticatedFetch(API.ACTIVITIES, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const errorDetails = data.errors ? ` (${data.errors})` : '';
+    throw new Error((data.message || 'Failed to log activity.') + errorDetails);
+  }
+  return data;
+}
+
+export async function fetchActivitiesSummary() {
+  const response = await authenticatedFetch(API.ACTIVITIES_SUMMARY);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to fetch activities summary.');
 export async function fetchReportsAnalytics(queryParams = {}) {
   const params = new URLSearchParams();
   Object.keys(queryParams).forEach((key) => {

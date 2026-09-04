@@ -1,109 +1,27 @@
-import React, { useState, useEffect } from 'react';
-import { Phone, Mail, Calendar, MonitorPlay, Globe, Plus, X, Play, Pause, Paperclip, FileText, CheckCircle2, Clock, Sparkles, RefreshCw, ChevronUp, ChevronDown } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Phone, Mail, Calendar, MonitorPlay, Globe, Plus, X, Play, Pause, Paperclip, FileText, CheckCircle2, Clock, Sparkles, RefreshCw, ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { fetchLeads, fetchCurrentUsers } from '../services/leadService';
+import { fetchLeads, fetchCurrentUsers, fetchActivitiesFeed, fetchActivitiesSummary, logGlobalActivity } from '../services/leadService';
 import './Activities.css';
 
-// Helper to generate dynamic activities based on leadsList dataset
-const generateActivities = (leadsList) => {
-  const list = [];
-  if (!leadsList) return list;
-  let actId = 1;
-  leadsList.forEach((lead) => {
-    const valClean = lead.value ? parseInt(String(lead.value).replace(/[^0-9]/g, ''), 10) : 0;
-    const dealSize = valClean > 150000 ? 'Large' : valClean > 50000 ? 'Medium' : 'Small';
-
-    // 1. Lead Profile Created (Other)
-    list.push({
-      id: actId++,
-      type: 'Other',
-      desc: `Lead profile created for ${lead.company} (${lead.contact})`,
-      lead: lead.contact,
-      rep: lead.owner || 'System',
-      time: lead.createdAt ? lead.createdAt.replace('T', ' ').substring(0, 16) : 'Recently',
-      outcome: 'Success',
-      icon: <FileText size={14} />,
-      colorClass: 'other-icon',
-      geo: lead.region || 'Unknown',
-      industry: lead.industry || 'Unknown',
-      dealSize: dealSize
-    });
-
-    // 2. Email Activity for most leads
-    if (['Prospecting', 'Qualification', 'Needs Analysis', 'Proposal', 'Negotiation', 'Closed Won', 'Closed Lost'].includes(lead.stage)) {
-      list.push({
-        id: actId++,
-        type: 'Email',
-        desc: `Sent introduction email and product presentation deck to ${lead.contact}`,
-        lead: lead.contact,
-        rep: lead.owner || 'System',
-        time: lead.createdAt ? new Date(new Date(lead.createdAt).getTime() + 2 * 3600000).toISOString().replace('T', ' ').substring(0, 16) : 'Recently',
-        outcome: 'Interested',
-        icon: <Mail size={14} />,
-        colorClass: 'email-icon',
-        geo: lead.region || 'Unknown',
-        industry: lead.industry || 'Unknown',
-        dealSize: dealSize
-      });
-    }
-
-    // 3. Call Activity
-    if (['Needs Analysis', 'Proposal', 'Negotiation', 'Closed Won'].includes(lead.stage)) {
-      list.push({
-        id: actId++,
-        type: 'Call',
-        desc: `Requirements assessment call with ${lead.contact}`,
-        lead: lead.contact,
-        rep: lead.owner || 'System',
-        time: lead.createdAt ? new Date(new Date(lead.createdAt).getTime() + 24 * 3600000).toISOString().replace('T', ' ').substring(0, 16) : 'Recently',
-        outcome: 'Scheduled Demo',
-        icon: <Phone size={14} />,
-        colorClass: 'call-icon',
-        geo: lead.region || 'Unknown',
-        industry: lead.industry || 'Unknown',
-        dealSize: dealSize
-      });
-    }
-
-    // 4. Demo Activity
-    if (['Proposal', 'Negotiation', 'Closed Won'].includes(lead.stage)) {
-      list.push({
-        id: actId++,
-        type: 'Demo',
-        desc: `Virtual product demonstration and SLA capability review`,
-        lead: lead.contact,
-        rep: lead.owner || 'System',
-        time: lead.createdAt ? new Date(new Date(lead.createdAt).getTime() + 48 * 3600000).toISOString().replace('T', ' ').substring(0, 16) : 'Recently',
-        outcome: 'Highly Positive',
-        icon: <MonitorPlay size={14} />,
-        colorClass: 'demo-icon',
-        geo: lead.region || 'Unknown',
-        industry: lead.industry || 'Unknown',
-        dealSize: dealSize
-      });
-    }
-
-    // 5. Proposal Sent Activity
-    if (['Negotiation', 'Closed Won'].includes(lead.stage)) {
-      list.push({
-        id: actId++,
-        type: 'Proposal Sent',
-        desc: `Emailed formal commercial proposal valuing ${lead.value || 'N/A'}`,
-        lead: lead.contact,
-        rep: lead.owner || 'System',
-        time: lead.createdAt ? new Date(new Date(lead.createdAt).getTime() + 72 * 3600000).toISOString().replace('T', ' ').substring(0, 16) : 'Recently',
-        outcome: 'Proposal Sent',
-        icon: <Mail size={14} />,
-        colorClass: 'proposal-icon',
-        geo: lead.region || 'Unknown',
-        industry: lead.industry || 'Unknown',
-        dealSize: dealSize
-      });
-    }
-  });
-
-  // Sort latest first
-  return list.sort((a, b) => new Date(b.time) - new Date(a.time));
+// Helper to determine icon and color class for activity types
+const getActivityMeta = (type) => {
+  switch (type) {
+    case 'Email':
+      return { icon: <Mail size={14} />, colorClass: 'email-icon' };
+    case 'Call':
+      return { icon: <Phone size={14} />, colorClass: 'call-icon' };
+    case 'Meeting':
+      return { icon: <Calendar size={14} />, colorClass: 'meeting-icon' };
+    case 'Demo':
+      return { icon: <MonitorPlay size={14} />, colorClass: 'demo-icon' };
+    case 'LinkedIn':
+      return { icon: <Globe size={14} />, colorClass: 'linkedin-icon' };
+    case 'Proposal Sent':
+      return { icon: <Mail size={14} />, colorClass: 'proposal-icon' };
+    default:
+      return { icon: <FileText size={14} />, colorClass: 'other-icon' };
+  }
 };
 
 export default function Activities() {
@@ -113,12 +31,47 @@ export default function Activities() {
   const [geoFilter, setGeoFilter] = useState('All Geographies');
   const [industryFilter, setIndustryFilter] = useState('All Industries');
   const [sizeFilter, setSizeFilter] = useState('All Deal Sizes');
+  
+  // Data states
+  const [leadsList, setLeadsList] = useState([]);
+  const [usersList, setUsersList] = useState([]);
+  const [activitiesData, setActivitiesData] = useState([]);
+  const [activitiesLoading, setActivitiesLoading] = useState(false);
+  const [typeCounts, setTypeCounts] = useState({
+    all: 0,
+    call: 0,
+    email: 0,
+    meeting: 0,
+    demo: 0,
+    linkedin: 0,
+    proposal_sent: 0,
+    other: 0,
+  });
+  const [summaryData, setSummaryData] = useState({
+    velocity_today_logged: 0,
+    velocity_today_completed: 0,
+    velocity_today_planned: 0,
+    overdue_count: 0,
+    upcoming_count: 0,
+  });
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 20,
+    total: 0,
+    totalPages: 0,
+  });
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Modal & Interaction states
   const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
+  const [logModalLoading, setLogModalLoading] = useState(false);
+  const [logModalError, setLogModalError] = useState('');
   const [selectedActivity, setSelectedActivity] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackTime, setPlaybackTime] = useState(0);
   const [demoProgress, setDemoProgress] = useState(0);
 
+  // Audio / Video playback simulation
   useEffect(() => {
     let interval = null;
     if (isPlaying && selectedActivity) {
@@ -147,6 +100,7 @@ export default function Activities() {
     setDemoProgress(0);
   }, [selectedActivity]);
 
+  // AI Insights Expand state
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [isAiExpanded, setIsAiExpanded] = useState(() => {
     const saved = sessionStorage.getItem('isAiExpanded_activities');
@@ -157,47 +111,126 @@ export default function Activities() {
     sessionStorage.setItem('isAiExpanded_activities', JSON.stringify(isAiExpanded));
   }, [isAiExpanded]);
 
-  const handleRefreshAi = () => {
-    setIsAiLoading(true);
-    setTimeout(() => {
-      setIsAiLoading(false);
-    }, 1000);
-  };
-
-  const [leadsList, setLeadsList] = useState([]);
-  const [activitiesData, setActivitiesData] = useState([]);
-  const [usersList, setUsersList] = useState([]);
-
+  // Load Initial Users & Leads for dropdown options
   useEffect(() => {
-    const loadLeads = async () => {
+    const loadDropdownData = async () => {
       try {
-        const res = await fetchLeads({ limit: 100 });
-        if (res.success && res.data) {
-          setLeadsList(res.data);
-          const generated = generateActivities(res.data);
-          setActivitiesData(generated);
+        const [leadsRes, usersRes] = await Promise.allSettled([
+          fetchLeads({ limit: 100 }),
+          fetchCurrentUsers(),
+        ]);
+        if (leadsRes.status === 'fulfilled' && leadsRes.value?.success && leadsRes.value?.data) {
+          setLeadsList(leadsRes.value.data);
+        }
+        if (usersRes.status === 'fulfilled' && usersRes.value?.success && usersRes.value?.data) {
+          setUsersList(usersRes.value.data);
         }
       } catch (err) {
-        console.error('Failed to load leads for activities:', err);
+        console.error('Failed to load dropdown options:', err);
       }
     };
-
-    const loadUsers = async () => {
-      try {
-        const res = await fetchCurrentUsers();
-        if (res.success && res.data) {
-          setUsersList(res.data);
-        }
-      } catch (err) {
-        console.error('Failed to load users for activities:', err);
-      }
-    };
-
-    loadLeads();
-    loadUsers();
+    loadDropdownData();
   }, []);
 
+  // Fetch Activities Summary Metrics
+  const loadSummary = useCallback(async () => {
+    try {
+      const res = await fetchActivitiesSummary();
+      if (res.success && res.data) {
+        setSummaryData(res.data);
+      }
+    } catch (err) {
+      console.error('Failed to load activities summary:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadSummary();
+  }, [loadSummary]);
+
+  // Fetch Activities Feed from Backend with Filters & Pagination
+  const loadActivitiesFeed = useCallback(async () => {
+    setActivitiesLoading(true);
+    try {
+      const query = {
+        page: currentPage,
+        limit: 20,
+      };
+
+      if (activeFilter && activeFilter !== 'All Activity Types' && activeFilter !== 'All') {
+        query.type = activeFilter;
+      }
+      if (userFilter && userFilter !== 'All Users') {
+        query.rep = userFilter;
+      }
+      if (leadFilter && leadFilter !== 'All Leads') {
+        // Find matching lead ID if selected by contact/company
+        const matched = leadsList.find(l => l.contact === leadFilter || l.company === leadFilter);
+        if (matched) {
+          query.lead_id = matched.leadId || matched.id;
+        }
+      }
+      if (geoFilter && geoFilter !== 'All Geographies') {
+        query.geography = geoFilter;
+      }
+      if (industryFilter && industryFilter !== 'All Industries') {
+        query.industry = industryFilter;
+      }
+      if (sizeFilter && sizeFilter !== 'All Deal Sizes') {
+        query.deal_size = sizeFilter;
+      }
+
+      const res = await fetchActivitiesFeed(query);
+      if (res.success && res.data) {
+        const mapped = res.data.map(item => {
+          const meta = getActivityMeta(item.type);
+          return {
+            id: item.id,
+            type: item.type,
+            desc: item.desc,
+            lead: item.leadName || item.company || 'Unknown Lead',
+            leadId: item.leadId,
+            company: item.company,
+            rep: item.rep || 'System',
+            time: item.timestamp ? item.timestamp.replace('T', ' ').substring(0, 16) : '',
+            outcome: item.outcome || '',
+            geo: item.geography || 'Unknown',
+            industry: item.industry || 'Unknown',
+            dealSize: item.dealSize || 'Medium',
+            dueDate: item.dueDate || '',
+            completed: item.completed,
+            icon: meta.icon,
+            colorClass: meta.colorClass,
+          };
+        });
+        setActivitiesData(mapped);
+
+        if (res.type_counts) {
+          setTypeCounts(res.type_counts);
+        }
+        if (res.pagination) {
+          setPagination(res.pagination);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load activities feed:', err);
+    } finally {
+      setActivitiesLoading(false);
+    }
+  }, [currentPage, activeFilter, userFilter, leadFilter, geoFilter, industryFilter, sizeFilter, leadsList]);
+
+  useEffect(() => {
+    loadActivitiesFeed();
+  }, [loadActivitiesFeed]);
+
+  const handleRefreshAi = async () => {
+    setIsAiLoading(true);
+    await Promise.allSettled([loadSummary(), loadActivitiesFeed()]);
+    setIsAiLoading(false);
+  };
+
   const [activeActivityModal, setActiveActivityModal] = useState(null);
+  const [modalLoading, setModalLoading] = useState(false);
   const [actSearch, setActSearch] = useState('');
   const [actOwnerFilter, setActOwnerFilter] = useState('');
   const [actPriorityFilter, setActPriorityFilter] = useState('');
@@ -206,13 +239,98 @@ export default function Activities() {
   const actItemsPerPage = 5;
   const navigate = useNavigate();
 
-  const handleOpenActivityModal = (title, list) => {
-    setActiveActivityModal({ title, list });
+  const handleOpenActivityModal = async (title) => {
+    const isOverdue = title === 'Overdue Tasks';
+    setActiveActivityModal({ title, list: [] });
     setActSearch('');
     setActOwnerFilter('');
     setActPriorityFilter('');
     setActTypeFilter('');
     setActPage(1);
+    setModalLoading(true);
+
+    try {
+      const res = await fetchActivitiesFeed({
+        due_status: isOverdue ? 'overdue' : 'upcoming',
+        limit: 100,
+      });
+
+      if (res && res.success && res.data) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const nextWeek = new Date(today);
+        nextWeek.setDate(nextWeek.getDate() + 7);
+        nextWeek.setHours(23, 59, 59, 999);
+
+        const filteredItems = res.data.filter(item => {
+          if (item.completed) return false;
+          if (!item.dueDate) return false;
+          const due = new Date(item.dueDate);
+          due.setHours(0, 0, 0, 0);
+
+          if (isOverdue) {
+            return due < today;
+          } else {
+            return due >= today && due <= nextWeek;
+          }
+        });
+
+        const mapped = filteredItems.map(item => {
+          let diffDays = 0;
+          let scheduledDate = 'This Week';
+          let overdueBy = '';
+
+          if (item.dueDate) {
+            const due = new Date(item.dueDate);
+            due.setHours(0, 0, 0, 0);
+            const diffTime = due.getTime() - today.getTime();
+            const days = Math.round(diffTime / (1000 * 60 * 60 * 24));
+            diffDays = Math.abs(days);
+
+            if (days < 0) {
+              overdueBy = `${Math.abs(days)} Day${Math.abs(days) > 1 ? 's' : ''}`;
+            } else if (days === 0) {
+              scheduledDate = 'Today';
+            } else if (days === 1) {
+              scheduledDate = 'Tomorrow';
+            } else if (days <= 7) {
+              scheduledDate = 'This Week';
+            } else {
+              scheduledDate = 'Next Week';
+            }
+          }
+
+          let actType = item.type || 'Call';
+          let actDesc = item.desc || (isOverdue ? 'Overdue follow-up' : 'Scheduled activity');
+
+          return {
+            actId: `ACT-${String(item.leadId || item.id).substring(0, 8)}`,
+            leadId: item.leadId,
+            company: item.company || 'Unknown Company',
+            contact: item.leadName || '',
+            type: actType,
+            desc: actDesc,
+            owner: item.rep || 'Unassigned',
+            dueDate: item.dueDate || '',
+            overdueBy: overdueBy || `${diffDays} Day${diffDays > 1 ? 's' : ''}`,
+            diffDays,
+            scheduledDate,
+            scheduledDateRaw: item.dueDate || '',
+            scheduledTime: '10:00 AM',
+            priority: item.priority || (isOverdue ? 'High' : 'Normal'),
+            status: item.completed ? 'Completed' : (item.status || 'Open'),
+            leadRaw: { id: item.leadId }
+          };
+        });
+
+        setActiveActivityModal({ title, list: mapped });
+      }
+    } catch (err) {
+      console.error('Failed to load modal activities:', err);
+    } finally {
+      setModalLoading(false);
+    }
   };
 
   const getFilteredModalActivities = () => {
@@ -222,9 +340,10 @@ export default function Activities() {
     if (actSearch.trim()) {
       const q = actSearch.toLowerCase();
       list = list.filter(a => 
-        a.company.toLowerCase().includes(q) || 
-        a.desc.toLowerCase().includes(q) ||
-        a.actId.toLowerCase().includes(q)
+        (a.company && a.company.toLowerCase().includes(q)) || 
+        (a.desc && a.desc.toLowerCase().includes(q)) ||
+        (a.actId && a.actId.toLowerCase().includes(q)) ||
+        (a.contact && a.contact.toLowerCase().includes(q))
       );
     }
 
@@ -243,69 +362,6 @@ export default function Activities() {
     return list;
   };
 
-  const getLeadDate = (l) => {
-    return l.nextFollowUp || l.estimatedRequirementDate || l.lastContactDate || '';
-  };
-
-  const overdueActivitiesList = leadsList.filter(l => l.status !== 'Won' && l.status !== 'Lost' && getLeadDate(l) && new Date(getLeadDate(l)) < new Date()).map(l => {
-    let actType = 'Call';
-    let actDesc = 'Follow-up Call';
-    if (l.stage === 'Proposal') { actType = 'Proposal Sent'; actDesc = 'Proposal Follow-up'; }
-    if (l.stage === 'Negotiation') { actType = 'Meeting'; actDesc = 'Contract Discussion'; }
-    if (l.stage === 'Needs Analysis') { actType = 'Demo'; actDesc = 'Product Demo'; }
-
-    const diffTime = Math.abs(new Date() - new Date(getLeadDate(l)));
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    return {
-      actId: `ACT-${l.id.toString().substring(0, 8)}`,
-      leadId: l.id,
-      company: l.company,
-      contact: l.contact,
-      type: actType,
-      desc: actDesc,
-      owner: l.owner,
-      dueDate: getLeadDate(l),
-      overdueBy: `${diffDays} Day${diffDays > 1 ? 's' : ''}`,
-      diffDays,
-      priority: l.priority || 'High',
-      status: l.status,
-      leadRaw: l
-    };
-  });
-
-  const upcomingActivitiesList = leadsList.filter(l => l.status !== 'Won' && l.status !== 'Lost' && getLeadDate(l) && new Date(getLeadDate(l)) >= new Date()).map(l => {
-    let actType = 'Call';
-    let actDesc = 'Follow-up Call';
-    if (l.stage === 'Proposal') { actType = 'Proposal Sent'; actDesc = 'Proposal Review'; }
-    if (l.stage === 'Negotiation') { actType = 'Meeting'; actDesc = 'Contract Discussion'; }
-    if (l.stage === 'Needs Analysis') { actType = 'Demo'; actDesc = 'Product Walkthrough'; }
-
-    const diffTime = new Date(getLeadDate(l)) - new Date();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    let scheduledDate = 'This Week';
-    if (diffDays === 0) scheduledDate = 'Today';
-    else if (diffDays === 1) scheduledDate = 'Tomorrow';
-    else if (diffDays > 7) scheduledDate = 'Next Week';
-
-    return {
-      actId: `ACT-${l.id.toString().substring(0, 8)}`,
-      leadId: l.id,
-      company: l.company,
-      contact: l.contact,
-      type: actType,
-      desc: actDesc,
-      owner: l.owner,
-      scheduledDate,
-      scheduledDateRaw: getLeadDate(l),
-      scheduledTime: '10:00 AM',
-      priority: l.priority || 'Normal',
-      status: l.status,
-      leadRaw: l
-    };
-  });
-
   const uniqueUsers = usersList.length > 0
     ? Array.from(new Set(usersList.map(u => u.name))).filter(Boolean).sort()
     : Array.from(new Set(leadsList.map(l => l.owner))).filter(Boolean).sort();
@@ -314,78 +370,61 @@ export default function Activities() {
   const uniqueIndustries = ['Retail', 'Defence', 'Consulting', 'E-commerce', 'Banking', 'Technology', 'Logistics', 'Healthcare', 'Finance', 'IT Services', 'Education', 'Manufacturing', 'Real Estate'];
 
   const pillTypes = [
-    { name: 'All', value: 'All Activity Types' },
-    { name: 'Call', value: 'Call' },
-    { name: 'Email', value: 'Email' },
-    { name: 'Meeting', value: 'Meeting' },
-    { name: 'Demo', value: 'Demo' },
-    { name: 'LinkedIn', value: 'LinkedIn' },
-    { name: 'Proposal Sent', value: 'Proposal Sent' },
-    { name: 'Other', value: 'Other' }
+    { name: 'All', value: 'All Activity Types', countKey: 'all' },
+    { name: 'Call', value: 'Call', countKey: 'call' },
+    { name: 'Email', value: 'Email', countKey: 'email' },
+    { name: 'Meeting', value: 'Meeting', countKey: 'meeting' },
+    { name: 'Demo', value: 'Demo', countKey: 'demo' },
+    { name: 'LinkedIn', value: 'LinkedIn', countKey: 'linkedin' },
+    { name: 'Proposal Sent', value: 'Proposal Sent', countKey: 'proposal_sent' },
+    { name: 'Other', value: 'Other', countKey: 'other' }
   ];
 
-  const getPillCount = (value) => {
-    if (value === 'All Activity Types') {
-      return activitiesData.length;
-    }
-    if (value === 'Other') {
-      const standardTypes = ['Call', 'Email', 'Meeting', 'Demo', 'LinkedIn', 'Proposal Sent'];
-      return activitiesData.filter(act => !standardTypes.includes(act.type)).length;
-    }
-    return activitiesData.filter(act => act.type === value).length;
+  const getPillCount = (countKey) => {
+    return typeCounts[countKey] || 0;
   };
 
-  const filteredActivities = activitiesData.filter(activity => {
-    let matchesType = false;
-    if (activeFilter === 'All Activity Types') {
-      matchesType = true;
-    } else if (activeFilter === 'Other') {
-      const standardTypes = ['Call', 'Email', 'Meeting', 'Demo', 'LinkedIn', 'Proposal Sent'];
-      matchesType = !standardTypes.includes(activity.type);
-    } else {
-      matchesType = activity.type === activeFilter;
-    }
-    const matchesRep = userFilter === 'All Users' || activity.rep === userFilter;
-    const matchesLead = leadFilter === 'All Leads' || activity.lead === leadFilter;
-    const matchesGeo = geoFilter === 'All Geographies' || activity.geo === geoFilter;
-    const matchesIndustry = industryFilter === 'All Industries' || activity.industry === industryFilter;
-    const matchesSize = sizeFilter === 'All Deal Sizes' || activity.dealSize === sizeFilter;
-    return matchesType && matchesRep && matchesLead && matchesGeo && matchesIndustry && matchesSize;
-  });
-
-  const handleLogActivity = (e) => {
+  const handleLogActivity = async (e) => {
     e.preventDefault();
-    const type = e.target.elements.type.value;
-    const desc = e.target.elements.desc.value;
-    const lead = e.target.elements.lead.value;
-    const outcome = e.target.elements.outcome.value;
-    const geo = e.target.elements.geo.value;
-    const industry = e.target.elements.industry.value;
-    const dealSize = e.target.elements.dealSize.value;
-    
-    let icon, colorClass;
-    if (type === 'Email') { icon = <Mail size={14} />; colorClass = 'email-icon'; }
-    else if (type === 'Call') { icon = <Phone size={14} />; colorClass = 'call-icon'; }
-    else if (type === 'Meeting') { icon = <Calendar size={14} />; colorClass = 'meeting-icon'; }
-    else if (type === 'Demo') { icon = <MonitorPlay size={14} />; colorClass = 'demo-icon'; }
-    else if (type === 'LinkedIn') { icon = <Globe size={14} />; colorClass = 'linkedin-icon'; }
-    else if (type === 'Proposal Sent') { icon = <Mail size={14} />; colorClass = 'proposal-icon'; }
-    else { icon = <Globe size={14} />; colorClass = 'other-icon'; }
+    setLogModalLoading(true);
+    setLogModalError('');
+    try {
+      const form = e.target;
+      const type = form.elements.type.value;
+      const lead = form.elements.lead.value;
+      const desc = form.elements.desc.value;
+      const outcome = form.elements.outcome?.value || '';
+      const dueDate = form.elements.dueDate?.value || '';
 
-    const newActivity = {
-      id: Date.now(),
-      type, desc, lead, rep: 'You', time: new Date().toLocaleString([], {year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute:'2-digit'}), outcome, icon, colorClass, geo, industry, dealSize
-    };
-    
-    setActivitiesData([newActivity, ...activitiesData]);
-    setIsActivityModalOpen(false);
+      await logGlobalActivity({
+        type,
+        lead,
+        desc,
+        outcome: outcome || undefined,
+        dueDate: dueDate || undefined,
+      });
+
+      setIsActivityModalOpen(false);
+      form.reset();
+      setCurrentPage(1);
+      await Promise.allSettled([loadActivitiesFeed(), loadSummary()]);
+    } catch (err) {
+      console.error('Failed to log activity:', err);
+      setLogModalError(err.message || 'Failed to log activity.');
+    } finally {
+      setLogModalLoading(false);
+    }
   };
 
   return (
     <div className="activities-container">
       <div className="activities-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h1 className="page-title" style={{ margin: 0 }}>Activities Timeline</h1>
-        <button className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', fontSize: '14px' }} onClick={() => setIsActivityModalOpen(true)}>
+        <button 
+          className="btn-primary" 
+          style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', fontSize: '14px' }} 
+          onClick={() => { setLogModalError(''); setIsActivityModalOpen(true); }}
+        >
           <Plus size={14} /> Log Activity
         </button>
       </div>
@@ -435,20 +474,20 @@ export default function Activities() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', paddingTop: '16px' }}>
               <div className="ai-premium-stat-box">
                 <div className="ai-premium-stat-title">Today's Velocity</div>
-                <div className="ai-premium-stat-value" style={{ color: '#34D399' }}>12 Logged</div>
-                <div className="ai-premium-stat-desc">4 Completed · 8 Planned</div>
+                <div className="ai-premium-stat-value" style={{ color: '#34D399' }}>{summaryData.velocity_today_logged} Logged</div>
+                <div className="ai-premium-stat-desc">{summaryData.velocity_today_completed} Completed · {summaryData.velocity_today_planned} Planned</div>
               </div>
               <div className="ai-premium-stat-box">
                 <div className="ai-premium-stat-title">Tasks Health</div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '13px' }}>
-                  <span style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={() => handleOpenActivityModal('Overdue Tasks', overdueActivitiesList)}>⚠️ {overdueActivitiesList.length} Overdue</span>
-                  <span style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={() => handleOpenActivityModal('Upcoming Tasks', upcomingActivitiesList)}>📅 {upcomingActivitiesList.length} Upcoming</span>
+                  <span style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={() => handleOpenActivityModal('Overdue Tasks')}>⚠️ {summaryData.overdue_count} Overdue</span>
+                  <span style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={() => handleOpenActivityModal('Upcoming Tasks')}>📅 {summaryData.upcoming_count} Upcoming</span>
                 </div>
               </div>
               <div className="ai-premium-recommendation-box">
                 <div className="ai-premium-recommendation-title">AI Performance Recommendation</div>
                 <div className="ai-premium-recommendation-text">
-                  ⚡ **Follow-up Velocity is Stalling:** Your team average call duration is 2.5 minutes, but closing rates improve by 40% when calls last &gt;5 minutes. Ask open-ended questions about budget constraints in proposal stages.
+                  ⚡ **Follow-up Velocity is Key:** Your team average response speed is consistent. Engage leads within 24 hours of demonstration to improve win rates across pipeline stages.
                 </div>
               </div>
             </div>
@@ -461,7 +500,12 @@ export default function Activities() {
         {/* Search by User */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
           <label style={{ fontSize: '11px', fontWeight: '600', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Search by User</label>
-          <select value={userFilter} onChange={(e) => setUserFilter(e.target.value)} className="activities-select" style={{ width: '100%', minWidth: 'auto', padding: '8px 12px' }}>
+          <select 
+            value={userFilter} 
+            onChange={(e) => { setUserFilter(e.target.value); setCurrentPage(1); }} 
+            className="activities-select" 
+            style={{ width: '100%', minWidth: 'auto', padding: '8px 12px' }}
+          >
             <option>All Users</option>
             {uniqueUsers.map(u => <option key={u}>{u}</option>)}
           </select>
@@ -470,7 +514,12 @@ export default function Activities() {
         {/* Lead Name */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
           <label style={{ fontSize: '11px', fontWeight: '600', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Lead Name</label>
-          <select value={leadFilter} onChange={(e) => setLeadFilter(e.target.value)} className="activities-select" style={{ width: '100%', minWidth: 'auto', padding: '8px 12px' }}>
+          <select 
+            value={leadFilter} 
+            onChange={(e) => { setLeadFilter(e.target.value); setCurrentPage(1); }} 
+            className="activities-select" 
+            style={{ width: '100%', minWidth: 'auto', padding: '8px 12px' }}
+          >
             <option>All Leads</option>
             {uniqueLeads.map(l => <option key={l}>{l}</option>)}
           </select>
@@ -479,7 +528,12 @@ export default function Activities() {
         {/* Geography */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
           <label style={{ fontSize: '11px', fontWeight: '600', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Geography</label>
-          <select value={geoFilter} onChange={(e) => setGeoFilter(e.target.value)} className="activities-select" style={{ width: '100%', minWidth: 'auto', padding: '8px 12px' }}>
+          <select 
+            value={geoFilter} 
+            onChange={(e) => { setGeoFilter(e.target.value); setCurrentPage(1); }} 
+            className="activities-select" 
+            style={{ width: '100%', minWidth: 'auto', padding: '8px 12px' }}
+          >
             <option>All Geographies</option>
             {uniqueGeos.map(g => <option key={g}>{g}</option>)}
           </select>
@@ -488,7 +542,12 @@ export default function Activities() {
         {/* Industry */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
           <label style={{ fontSize: '11px', fontWeight: '600', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Industry</label>
-          <select value={industryFilter} onChange={(e) => setIndustryFilter(e.target.value)} className="activities-select" style={{ width: '100%', minWidth: 'auto', padding: '8px 12px' }}>
+          <select 
+            value={industryFilter} 
+            onChange={(e) => { setIndustryFilter(e.target.value); setCurrentPage(1); }} 
+            className="activities-select" 
+            style={{ width: '100%', minWidth: 'auto', padding: '8px 12px' }}
+          >
             <option>All Industries</option>
             {uniqueIndustries.map(i => <option key={i}>{i}</option>)}
           </select>
@@ -497,7 +556,12 @@ export default function Activities() {
         {/* Deal Size */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
           <label style={{ fontSize: '11px', fontWeight: '600', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Deal Size</label>
-          <select value={sizeFilter} onChange={(e) => setSizeFilter(e.target.value)} className="activities-select" style={{ width: '100%', minWidth: 'auto', padding: '8px 12px' }}>
+          <select 
+            value={sizeFilter} 
+            onChange={(e) => { setSizeFilter(e.target.value); setCurrentPage(1); }} 
+            className="activities-select" 
+            style={{ width: '100%', minWidth: 'auto', padding: '8px 12px' }}
+          >
             <option>All Deal Sizes</option>
             <option>Small</option>
             <option>Medium</option>
@@ -505,8 +569,6 @@ export default function Activities() {
           </select>
         </div>
       </div>
-
-
 
       {/* Activities Timeline list (main card) */}
       <div className="activities-main-card" style={{ padding: '28px' }}>
@@ -516,11 +578,11 @@ export default function Activities() {
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', borderBottom: '1px solid var(--color-border)', paddingBottom: '16px', marginBottom: '26px' }}>
           {pillTypes.map(pill => {
             const isSelected = activeFilter === pill.value;
-            const count = getPillCount(pill.value);
+            const count = getPillCount(pill.countKey);
             return (
               <button 
                 key={pill.name} 
-                onClick={() => setActiveFilter(pill.value)}
+                onClick={() => { setActiveFilter(pill.value); setCurrentPage(1); }}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -553,8 +615,12 @@ export default function Activities() {
 
         <div className="global-timeline-container">
           <div className="timeline-line"></div>
-          {filteredActivities.length > 0 ? (
-            filteredActivities.map(activity => {
+          {activitiesLoading ? (
+            <div style={{ padding: '32px', textAlign: 'center', color: 'var(--color-text-muted)' }}>
+              Loading activities...
+            </div>
+          ) : activitiesData.length > 0 ? (
+            activitiesData.map(activity => {
               const isInteractive = true;
               return (
                 <div key={activity.id} className="global-timeline-item">
@@ -592,8 +658,36 @@ export default function Activities() {
             </div>
           )}
         </div>
+
+        {/* Server Pagination Controls */}
+        {pagination.totalPages > 1 && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '24px', paddingTop: '16px', borderTop: '1px solid var(--color-border)' }}>
+            <span style={{ fontSize: '13px', color: 'var(--color-text-muted)' }}>
+              Page {pagination.page} of {pagination.totalPages} ({pagination.total} total activities)
+            </span>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button 
+                className="btn-secondary" 
+                disabled={currentPage <= 1 || activitiesLoading}
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 12px', fontSize: '13px' }}
+              >
+                <ChevronLeft size={16} /> Previous
+              </button>
+              <button 
+                className="btn-secondary" 
+                disabled={currentPage >= pagination.totalPages || activitiesLoading}
+                onClick={() => setCurrentPage(prev => prev + 1)}
+                style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 12px', fontSize: '13px' }}
+              >
+                Next <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
+      {/* Log New Activity Modal */}
       {isActivityModalOpen && (
         <div className="modal-overlay">
           <div className="modal-content">
@@ -601,67 +695,52 @@ export default function Activities() {
               <h3>Log New Activity</h3>
               <button className="icon-btn" onClick={() => setIsActivityModalOpen(false)}><X size={20} /></button>
             </div>
+            {logModalError && (
+              <div style={{ color: 'var(--color-danger)', padding: '12px 24px 0', fontSize: '13px', fontWeight: '500' }}>
+                ❌ {logModalError}
+              </div>
+            )}
             <form onSubmit={handleLogActivity} className="modal-form">
               <div className="form-group">
-                <label>Activity Type</label>
-                <select name="type">
-                  <option>Email</option>
-                  <option>Call</option>
-                  <option>Meeting</option>
-                  <option>Demo</option>
-                  <option>LinkedIn</option>
-                  <option>Proposal Sent</option>
-                  <option>Other</option>
+                <label>Activity Type <span style={{ color: 'var(--color-danger)' }}>*</span></label>
+                <select name="type" required defaultValue="Call">
+                  <option value="Call">Call</option>
+                  <option value="Email">Email</option>
+                  <option value="Meeting">Meeting</option>
+                  <option value="Demo">Demo</option>
+                  <option value="LinkedIn">LinkedIn</option>
+                  <option value="Proposal Sent">Proposal Sent</option>
+                  <option value="Other">Other</option>
                 </select>
               </div>
               <div className="form-group">
-                <label>Lead / Company</label>
-                <input name="lead" type="text" required placeholder="e.g. Acme Corp" />
+                <label>Lead / Company <span style={{ color: 'var(--color-danger)' }}>*</span></label>
+                <input name="lead" type="text" required placeholder="e.g. Acme Corp or Contact Name" />
               </div>
               <div className="form-group">
-                <label>Geography</label>
-                <select name="geo">
-                  <option>North America</option>
-                  <option>Europe</option>
-                  <option>Asia Pacific</option>
-                  <option>LATAM</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Industry</label>
-                <select name="industry">
-                  <option>Technology</option>
-                  <option>Logistics</option>
-                  <option>Healthcare</option>
-                  <option>Finance</option>
-                  <option>IT</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Deal Size</label>
-                <select name="dealSize">
-                  <option>Small</option>
-                  <option>Medium</option>
-                  <option>Large</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Description</label>
-                <textarea name="desc" required placeholder="What happened?" rows={3}></textarea>
+                <label>Description <span style={{ color: 'var(--color-danger)' }}>*</span></label>
+                <textarea name="desc" required placeholder="What happened in this activity?" rows={3}></textarea>
               </div>
               <div className="form-group">
                 <label>Outcome</label>
-                <input name="outcome" type="text" placeholder="e.g. Awaiting Reply" />
+                <input name="outcome" type="text" placeholder="e.g. Scheduled Demo, Follow-up agreed" />
+              </div>
+              <div className="form-group">
+                <label>Due / Follow-up Date</label>
+                <input name="dueDate" type="date" />
               </div>
               <div className="modal-actions">
-                <button type="button" className="btn-secondary" onClick={() => setIsActivityModalOpen(false)}>Cancel</button>
-                <button type="submit" className="btn-primary">Save Activity</button>
+                <button type="button" className="btn-secondary" disabled={logModalLoading} onClick={() => setIsActivityModalOpen(false)}>Cancel</button>
+                <button type="submit" className="btn-primary" disabled={logModalLoading}>
+                  {logModalLoading ? 'Saving...' : 'Save Activity'}
+                </button>
               </div>
             </form>
           </div>
         </div>
       )}
 
+      {/* Selected Activity Details Modal */}
       {selectedActivity && (
         <div className="detail-modal-overlay" onClick={() => setSelectedActivity(null)}>
           <div className="detail-modal-card" onClick={(e) => e.stopPropagation()}>
@@ -713,19 +792,19 @@ export default function Activities() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                   <div className="email-thread-box">
                     <div className="email-thread-header">
-                      <div><strong>From:</strong> {selectedActivity.rep === 'You' ? 'sales@pmrg.com' : `${selectedActivity.rep.toLowerCase().replace(' ', '.')}@pmrg.com`}</div>
-                      <div><strong>To:</strong> contact@{selectedActivity.lead.toLowerCase().replace(' ', '')}.com</div>
+                      <div><strong>From:</strong> {selectedActivity.rep === 'You' ? 'sales@pmrg.com' : `${String(selectedActivity.rep).toLowerCase().replace(' ', '.')}@pmrg.com`}</div>
+                      <div><strong>To:</strong> contact@{String(selectedActivity.lead).toLowerCase().replace(' ', '')}.com</div>
                       <div className="email-thread-subject"><strong>Subject:</strong> {selectedActivity.desc}</div>
                     </div>
                     <div className="email-thread-body">
                       {`Hi Team,
 
-                      Thanks for taking the time to speak with us. As discussed, I am sharing the updated pricing and catalog details regarding your query for ${selectedActivity.lead}.
+Thanks for taking the time to speak with us. As discussed, I am sharing the updated pricing and catalog details regarding your query for ${selectedActivity.lead}.
 
-                      We would love to set up a follow-up discussion to go through the custom deployment. Let me know what times work best for you next week.
+We would love to set up a follow-up discussion to go through the custom deployment. Let me know what times work best for you next week.
 
-                      Best regards,
-                      ${selectedActivity.rep}`}
+Best regards,
+${selectedActivity.rep}`}
                     </div>
                     <div className="email-attachments">
                       <Paperclip size={14} />
@@ -834,8 +913,8 @@ export default function Activities() {
                         }}>
                           <div style={{ border: '2px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '20px', width: '80%', backgroundColor: 'rgba(0,0,0,0.4)', textAlign: 'center' }}>
                             <Globe size={32} style={{ color: '#818CF8', marginBottom: '8px' }} />
-                            <div style={{ fontWeight: '600', fontSize: '14px' }}>PMRG Sales Dashboard Walkthrough</div>
-                            <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '4px' }}>Sharing Screen - Debabrata Ghosh</div>
+                            <div style={{ fontWeight: '600', fontSize: '14px' }}>Sales Platform Demonstration</div>
+                            <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '4px' }}>Sharing Screen - {selectedActivity.rep}</div>
                           </div>
                         </div>
                         
@@ -866,7 +945,7 @@ export default function Activities() {
                       </div>
                       <div className="checklist-item">
                         <CheckCircle2 size={14} style={{ color: '#10B981' }} />
-                        <span>Custom Vertical Stepper</span>
+                        <span>Custom Stepper Stages</span>
                       </div>
                       <div className="checklist-item">
                         <CheckCircle2 size={14} style={{ color: '#10B981' }} />
@@ -888,7 +967,7 @@ export default function Activities() {
                   <div style={{ backgroundColor: '#F8FAFC', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     <div>
                       <span style={{ fontSize: '11px', fontWeight: '600', color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Meeting Type</span>
-                      <div style={{ fontSize: '13px', fontWeight: '500', color: 'var(--color-text-main)', marginTop: '2px' }}>On-Site Client Presentation</div>
+                      <div style={{ fontSize: '13px', fontWeight: '500', color: 'var(--color-text-main)', marginTop: '2px' }}>Client Strategy Session</div>
                     </div>
                     <div>
                       <span style={{ fontSize: '11px', fontWeight: '600', color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Summary of Discussion</span>
@@ -911,7 +990,7 @@ export default function Activities() {
                       </div>
                       <div className="checklist-item">
                         <Clock size={14} style={{ color: '#F59E0B' }} />
-                        <span>SLA proposal to be shared by Sarah Jenkins next week.</span>
+                        <span>Next follow-up planned within upcoming milestone timeline.</span>
                       </div>
                     </div>
                   </div>
@@ -930,10 +1009,10 @@ export default function Activities() {
                   <div className="email-thread-box">
                     <div className="email-thread-header" style={{ backgroundColor: '#F0F9FF' }}>
                       <div style={{ color: '#0369A1', fontWeight: '600' }}>LinkedIn Direct Message Thread</div>
-                      <div><strong>To:</strong> contact@{selectedActivity.lead.toLowerCase().replace(' ', '')}.com</div>
+                      <div><strong>To:</strong> contact@{String(selectedActivity.lead).toLowerCase().replace(' ', '')}.com</div>
                     </div>
                     <div className="email-thread-body" style={{ fontStyle: 'italic', color: '#334155' }}>
-                      "Hi Team, I saw your recent updates. I'd love to connect and share how PMRG has helped similar firms in your industry automate key pipelines."
+                      {selectedActivity.desc}
                     </div>
                   </div>
 
@@ -951,8 +1030,8 @@ export default function Activities() {
                   
                   <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', padding: '16px', backgroundColor: '#F8FAFC' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                      <span style={{ fontWeight: '700', fontSize: '14px', color: 'var(--color-text-main)' }}>PMRG Enterprise Proposal v1.4</span>
-                      <span style={{ backgroundColor: '#D1FAE5', color: '#065F46', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: '600' }}>Pending Approval</span>
+                      <span style={{ fontWeight: '700', fontSize: '14px', color: 'var(--color-text-main)' }}>Commercial Proposal Document</span>
+                      <span style={{ backgroundColor: '#D1FAE5', color: '#065F46', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: '600' }}>Delivered</span>
                     </div>
                     <div style={{ fontSize: '13px', color: 'var(--color-text-muted)', lineHeight: '1.5' }}>
                       {selectedActivity.desc}
@@ -964,7 +1043,7 @@ export default function Activities() {
                     <span>Attached Document:</span>
                     <div className="attachment-chip">
                       <FileText size={14} style={{ color: '#059669' }} />
-                      <span>Commercial_Proposal_{selectedActivity.lead.replace(' ', '_')}.pdf (2.4 MB)</span>
+                      <span>Commercial_Proposal_{String(selectedActivity.lead).replace(' ', '_')}.pdf (2.4 MB)</span>
                     </div>
                   </div>
 
@@ -992,7 +1071,8 @@ export default function Activities() {
           </div>
         </div>
       )}
-      {/* Activity Drill-down Modal */}
+
+      {/* Activity Drill-down Modal for Tasks Health */}
       {activeActivityModal && (
         <div style={{ 
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
@@ -1009,7 +1089,7 @@ export default function Activities() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--color-border)', paddingBottom: '12px' }}>
               <h3 style={{ fontSize: '18px', fontWeight: 'bold', margin: 0, display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-text-main)' }}>
                 <Sparkles size={20} style={{ color: 'var(--color-primary)' }} />
-                AI Productivity Assistant: {activeActivityModal.title} ({activeActivityModal.list.length} Items)
+                AI Productivity Assistant: {activeActivityModal.title} ({modalLoading ? '...' : `${activeActivityModal.list.length} Items`})
               </h3>
               <button onClick={() => setActiveActivityModal(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted)' }}><X size={20} /></button>
             </div>
@@ -1037,11 +1117,7 @@ export default function Activities() {
                   style={{ padding: '8px 12px', fontSize: '13px', borderRadius: '4px', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-surface)', color: 'var(--color-text-main)' }}
                 >
                   <option value="">All Owners</option>
-                  <option value="D. Ghosh">D. Ghosh</option>
-                  <option value="S. Mishra">S. Mishra</option>
-                  <option value="H. Kumar">H. Kumar</option>
-                  <option value="P. Sharma">P. Sharma</option>
-                  <option value="R. Nair">R. Nair</option>
+                  {uniqueUsers.map(u => <option key={u} value={u}>{u}</option>)}
                 </select>
               </div>
 
@@ -1055,6 +1131,7 @@ export default function Activities() {
                 >
                   <option value="">All Priorities</option>
                   <option value="Low">Low</option>
+                  <option value="Normal">Normal</option>
                   <option value="Medium">Medium</option>
                   <option value="High">High</option>
                   <option value="Urgent">Urgent</option>
@@ -1074,7 +1151,9 @@ export default function Activities() {
                   <option value="Email">Email</option>
                   <option value="Meeting">Meeting</option>
                   <option value="Demo">Demo</option>
+                  <option value="LinkedIn">LinkedIn</option>
                   <option value="Proposal Sent">Proposal Sent</option>
+                  <option value="Other">Other</option>
                 </select>
               </div>
             </div>
@@ -1112,56 +1191,61 @@ export default function Activities() {
                   )}
                 </thead>
                 <tbody>
-                  {getFilteredModalActivities().slice((actPage - 1) * actItemsPerPage, actPage * actItemsPerPage).map(a => {
-                    const isOverdueView = activeActivityModal.title === 'Overdue Tasks';
-                    return (
-                      <tr key={a.actId} style={{ cursor: 'pointer' }} onClick={() => navigate('/leads', { state: { selectedLeadId: a.leadRaw.id } })}>
-                        <td style={{ color: 'var(--color-primary)', fontWeight: 'bold' }}>{a.actId}</td>
-                        <td style={{ color: 'var(--color-text-muted)', fontWeight: 'bold' }}>{a.leadId}</td>
-                        <td style={{ fontWeight: '500' }}>{a.company}</td>
-                        <td>{a.type}</td>
-                        <td>{a.owner}</td>
-                        {isOverdueView ? (
-                          <>
-                            <td>{a.dueDate}</td>
-                            <td>
-                              {a.diffDays <= 1 && <span style={{ backgroundColor: '#FEF3C7', color: '#D97706', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>1 Day</span>}
-                              {a.diffDays === 2 && <span style={{ backgroundColor: '#FFEDD5', color: '#EA580C', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>2 Days</span>}
-                              {a.diffDays > 2 && a.diffDays <= 5 && <span style={{ backgroundColor: '#FEE2E2', color: '#DC2626', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>{a.diffDays} Days</span>}
-                              {a.diffDays > 5 && <span style={{ backgroundColor: '#FEE2E2', color: '#991B1B', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>7+ Days</span>}
-                            </td>
-                          </>
-                        ) : (
-                          <>
-                            <td>
-                              <span className={`badge ${a.scheduledDate === 'Today' ? 'badge-danger' : a.scheduledDate === 'Tomorrow' ? 'badge-warning' : 'badge-info'}`}>
-                                {a.scheduledDate}
-                              </span>
-                            </td>
-                            <td>{a.scheduledTime}</td>
-                          </>
-                        )}
-                        <td><span className="badge badge-info">{a.priority}</span></td>
-                        <td><span className="badge badge-success">{a.status}</span></td>
-                        <td>
-                          <button 
-                            className="btn-secondary" 
-                            style={{ padding: '2px 8px', fontSize: '12px' }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigate('/leads', { state: { selectedLeadId: a.leadRaw.id } });
-                            }}
-                          >
-                            Open Profile
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {getFilteredModalActivities().length === 0 && (
+                  {modalLoading ? (
+                    <tr>
+                      <td colSpan="10" style={{ textAlign: 'center', padding: '24px', color: 'var(--color-text-muted)' }}>Loading activities...</td>
+                    </tr>
+                  ) : getFilteredModalActivities().length === 0 ? (
                     <tr>
                       <td colSpan="10" style={{ textAlign: 'center', padding: '24px', color: 'var(--color-text-muted)' }}>No activities found.</td>
                     </tr>
+                  ) : (
+                    getFilteredModalActivities().slice((actPage - 1) * actItemsPerPage, actPage * actItemsPerPage).map(a => {
+                      const isOverdueView = activeActivityModal.title === 'Overdue Tasks';
+                      return (
+                        <tr key={a.actId + '-' + (a.leadId || '')} style={{ cursor: 'pointer' }} onClick={() => navigate('/leads', { state: { selectedLeadId: a.leadRaw.id } })}>
+                          <td style={{ color: 'var(--color-primary)', fontWeight: 'bold' }}>{a.actId}</td>
+                          <td style={{ color: 'var(--color-text-muted)', fontWeight: 'bold' }}>{a.leadId}</td>
+                          <td style={{ fontWeight: '500' }}>{a.company}</td>
+                          <td>{a.type}</td>
+                          <td>{a.owner}</td>
+                          {isOverdueView ? (
+                            <>
+                              <td>{a.dueDate}</td>
+                              <td>
+                                {a.diffDays <= 1 && <span style={{ backgroundColor: '#FEF3C7', color: '#D97706', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>1 Day</span>}
+                                {a.diffDays === 2 && <span style={{ backgroundColor: '#FFEDD5', color: '#EA580C', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>2 Days</span>}
+                                {a.diffDays > 2 && a.diffDays <= 5 && <span style={{ backgroundColor: '#FEE2E2', color: '#DC2626', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>{a.diffDays} Days</span>}
+                                {a.diffDays > 5 && <span style={{ backgroundColor: '#FEE2E2', color: '#991B1B', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>7+ Days</span>}
+                              </td>
+                            </>
+                          ) : (
+                            <>
+                              <td>
+                                <span className={`badge ${a.scheduledDate === 'Today' ? 'badge-danger' : a.scheduledDate === 'Tomorrow' ? 'badge-warning' : 'badge-info'}`}>
+                                  {a.scheduledDate}
+                                </span>
+                              </td>
+                              <td>{a.scheduledTime}</td>
+                            </>
+                          )}
+                          <td><span className="badge badge-info">{a.priority}</span></td>
+                          <td><span className="badge badge-success">{a.status}</span></td>
+                          <td>
+                            <button 
+                              className="btn-secondary" 
+                              style={{ padding: '2px 8px', fontSize: '12px' }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate('/leads', { state: { selectedLeadId: a.leadRaw.id } });
+                              }}
+                            >
+                              Open Profile
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
