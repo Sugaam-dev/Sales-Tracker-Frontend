@@ -175,6 +175,21 @@ export async function fetchActivitiesFeed(queryParams = {}) {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(data.message || 'Failed to fetch activities feed.');
+export async function fetchDashboardSummary(queryParams = {}) {
+  const params = new URLSearchParams();
+  Object.keys(queryParams).forEach((key) => {
+    if (queryParams[key] !== undefined && queryParams[key] !== null && queryParams[key] !== '') {
+      params.append(key, queryParams[key]);
+    }
+  });
+
+  const queryString = params.toString();
+  const url = queryString ? `${API.DASHBOARD_SUMMARY}?${queryString}` : API.DASHBOARD_SUMMARY;
+
+  const response = await authenticatedFetch(url);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to fetch dashboard summary.');
   }
   return data;
 }
@@ -200,6 +215,21 @@ export async function fetchActivitiesSummary() {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(data.message || 'Failed to fetch activities summary.');
+export async function fetchReportsAnalytics(queryParams = {}) {
+  const params = new URLSearchParams();
+  Object.keys(queryParams).forEach((key) => {
+    if (queryParams[key] !== undefined && queryParams[key] !== null && queryParams[key] !== '') {
+      params.append(key, queryParams[key]);
+    }
+  });
+
+  const queryString = params.toString();
+  const url = queryString ? `${API.REPORTS_ANALYTICS}?${queryString}` : API.REPORTS_ANALYTICS;
+
+  const response = await authenticatedFetch(url);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to fetch reports analytics.');
   }
   return data;
 }
