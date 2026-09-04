@@ -230,6 +230,7 @@ export default function Activities() {
   };
 
   const [activeActivityModal, setActiveActivityModal] = useState(null);
+  const [modalLoading, setModalLoading] = useState(false);
   const [actSearch, setActSearch] = useState('');
   const [actOwnerFilter, setActOwnerFilter] = useState('');
   const [actPriorityFilter, setActPriorityFilter] = useState('');
@@ -238,13 +239,98 @@ export default function Activities() {
   const actItemsPerPage = 5;
   const navigate = useNavigate();
 
-  const handleOpenActivityModal = (title, list) => {
-    setActiveActivityModal({ title, list });
+  const handleOpenActivityModal = async (title) => {
+    const isOverdue = title === 'Overdue Tasks';
+    setActiveActivityModal({ title, list: [] });
     setActSearch('');
     setActOwnerFilter('');
     setActPriorityFilter('');
     setActTypeFilter('');
     setActPage(1);
+    setModalLoading(true);
+
+    try {
+      const res = await fetchActivitiesFeed({
+        due_status: isOverdue ? 'overdue' : 'upcoming',
+        limit: 100,
+      });
+
+      if (res && res.success && res.data) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const nextWeek = new Date(today);
+        nextWeek.setDate(nextWeek.getDate() + 7);
+        nextWeek.setHours(23, 59, 59, 999);
+
+        const filteredItems = res.data.filter(item => {
+          if (item.completed) return false;
+          if (!item.dueDate) return false;
+          const due = new Date(item.dueDate);
+          due.setHours(0, 0, 0, 0);
+
+          if (isOverdue) {
+            return due < today;
+          } else {
+            return due >= today && due <= nextWeek;
+          }
+        });
+
+        const mapped = filteredItems.map(item => {
+          let diffDays = 0;
+          let scheduledDate = 'This Week';
+          let overdueBy = '';
+
+          if (item.dueDate) {
+            const due = new Date(item.dueDate);
+            due.setHours(0, 0, 0, 0);
+            const diffTime = due.getTime() - today.getTime();
+            const days = Math.round(diffTime / (1000 * 60 * 60 * 24));
+            diffDays = Math.abs(days);
+
+            if (days < 0) {
+              overdueBy = `${Math.abs(days)} Day${Math.abs(days) > 1 ? 's' : ''}`;
+            } else if (days === 0) {
+              scheduledDate = 'Today';
+            } else if (days === 1) {
+              scheduledDate = 'Tomorrow';
+            } else if (days <= 7) {
+              scheduledDate = 'This Week';
+            } else {
+              scheduledDate = 'Next Week';
+            }
+          }
+
+          let actType = item.type || 'Call';
+          let actDesc = item.desc || (isOverdue ? 'Overdue follow-up' : 'Scheduled activity');
+
+          return {
+            actId: `ACT-${String(item.leadId || item.id).substring(0, 8)}`,
+            leadId: item.leadId,
+            company: item.company || 'Unknown Company',
+            contact: item.leadName || '',
+            type: actType,
+            desc: actDesc,
+            owner: item.rep || 'Unassigned',
+            dueDate: item.dueDate || '',
+            overdueBy: overdueBy || `${diffDays} Day${diffDays > 1 ? 's' : ''}`,
+            diffDays,
+            scheduledDate,
+            scheduledDateRaw: item.dueDate || '',
+            scheduledTime: '10:00 AM',
+            priority: item.priority || (isOverdue ? 'High' : 'Normal'),
+            status: item.completed ? 'Completed' : (item.status || 'Open'),
+            leadRaw: { id: item.leadId }
+          };
+        });
+
+        setActiveActivityModal({ title, list: mapped });
+      }
+    } catch (err) {
+      console.error('Failed to load modal activities:', err);
+    } finally {
+      setModalLoading(false);
+    }
   };
 
   const getFilteredModalActivities = () => {
@@ -256,7 +342,8 @@ export default function Activities() {
       list = list.filter(a => 
         (a.company && a.company.toLowerCase().includes(q)) || 
         (a.desc && a.desc.toLowerCase().includes(q)) ||
-        (a.actId && a.actId.toLowerCase().includes(q))
+        (a.actId && a.actId.toLowerCase().includes(q)) ||
+        (a.contact && a.contact.toLowerCase().includes(q))
       );
     }
 
@@ -274,69 +361,6 @@ export default function Activities() {
 
     return list;
   };
-
-  const getLeadDate = (l) => {
-    return l.nextFollowUp || l.estimatedRequirementDate || l.lastContactDate || '';
-  };
-
-  const overdueActivitiesList = leadsList.filter(l => l.status !== 'Won' && l.status !== 'Lost' && getLeadDate(l) && new Date(getLeadDate(l)) < new Date()).map(l => {
-    let actType = 'Call';
-    let actDesc = 'Follow-up Call';
-    if (l.stage === 'Proposal') { actType = 'Proposal Sent'; actDesc = 'Proposal Follow-up'; }
-    if (l.stage === 'Negotiation') { actType = 'Meeting'; actDesc = 'Contract Discussion'; }
-    if (l.stage === 'Needs Analysis') { actType = 'Demo'; actDesc = 'Product Demo'; }
-
-    const diffTime = Math.abs(new Date() - new Date(getLeadDate(l)));
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    return {
-      actId: `ACT-${String(l.id).substring(0, 8)}`,
-      leadId: l.id,
-      company: l.company,
-      contact: l.contact,
-      type: actType,
-      desc: actDesc,
-      owner: l.owner,
-      dueDate: getLeadDate(l),
-      overdueBy: `${diffDays} Day${diffDays > 1 ? 's' : ''}`,
-      diffDays,
-      priority: l.priority || 'High',
-      status: l.status,
-      leadRaw: l
-    };
-  });
-
-  const upcomingActivitiesList = leadsList.filter(l => l.status !== 'Won' && l.status !== 'Lost' && getLeadDate(l) && new Date(getLeadDate(l)) >= new Date()).map(l => {
-    let actType = 'Call';
-    let actDesc = 'Follow-up Call';
-    if (l.stage === 'Proposal') { actType = 'Proposal Sent'; actDesc = 'Proposal Review'; }
-    if (l.stage === 'Negotiation') { actType = 'Meeting'; actDesc = 'Contract Discussion'; }
-    if (l.stage === 'Needs Analysis') { actType = 'Demo'; actDesc = 'Product Walkthrough'; }
-
-    const diffTime = new Date(getLeadDate(l)) - new Date();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    let scheduledDate = 'This Week';
-    if (diffDays === 0) scheduledDate = 'Today';
-    else if (diffDays === 1) scheduledDate = 'Tomorrow';
-    else if (diffDays > 7) scheduledDate = 'Next Week';
-
-    return {
-      actId: `ACT-${String(l.id).substring(0, 8)}`,
-      leadId: l.id,
-      company: l.company,
-      contact: l.contact,
-      type: actType,
-      desc: actDesc,
-      owner: l.owner,
-      scheduledDate,
-      scheduledDateRaw: getLeadDate(l),
-      scheduledTime: '10:00 AM',
-      priority: l.priority || 'Normal',
-      status: l.status,
-      leadRaw: l
-    };
-  });
 
   const uniqueUsers = usersList.length > 0
     ? Array.from(new Set(usersList.map(u => u.name))).filter(Boolean).sort()
@@ -456,8 +480,8 @@ export default function Activities() {
               <div className="ai-premium-stat-box">
                 <div className="ai-premium-stat-title">Tasks Health</div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '13px' }}>
-                  <span style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={() => handleOpenActivityModal('Overdue Tasks', overdueActivitiesList)}>⚠️ {summaryData.overdue_count || overdueActivitiesList.length} Overdue</span>
-                  <span style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={() => handleOpenActivityModal('Upcoming Tasks', upcomingActivitiesList)}>📅 {summaryData.upcoming_count || upcomingActivitiesList.length} Upcoming</span>
+                  <span style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={() => handleOpenActivityModal('Overdue Tasks')}>⚠️ {summaryData.overdue_count} Overdue</span>
+                  <span style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={() => handleOpenActivityModal('Upcoming Tasks')}>📅 {summaryData.upcoming_count} Upcoming</span>
                 </div>
               </div>
               <div className="ai-premium-recommendation-box">
@@ -1065,7 +1089,7 @@ ${selectedActivity.rep}`}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--color-border)', paddingBottom: '12px' }}>
               <h3 style={{ fontSize: '18px', fontWeight: 'bold', margin: 0, display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-text-main)' }}>
                 <Sparkles size={20} style={{ color: 'var(--color-primary)' }} />
-                AI Productivity Assistant: {activeActivityModal.title} ({activeActivityModal.list.length} Items)
+                AI Productivity Assistant: {activeActivityModal.title} ({modalLoading ? '...' : `${activeActivityModal.list.length} Items`})
               </h3>
               <button onClick={() => setActiveActivityModal(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted)' }}><X size={20} /></button>
             </div>
@@ -1167,56 +1191,61 @@ ${selectedActivity.rep}`}
                   )}
                 </thead>
                 <tbody>
-                  {getFilteredModalActivities().slice((actPage - 1) * actItemsPerPage, actPage * actItemsPerPage).map(a => {
-                    const isOverdueView = activeActivityModal.title === 'Overdue Tasks';
-                    return (
-                      <tr key={a.actId} style={{ cursor: 'pointer' }} onClick={() => navigate('/leads', { state: { selectedLeadId: a.leadRaw.id } })}>
-                        <td style={{ color: 'var(--color-primary)', fontWeight: 'bold' }}>{a.actId}</td>
-                        <td style={{ color: 'var(--color-text-muted)', fontWeight: 'bold' }}>{a.leadId}</td>
-                        <td style={{ fontWeight: '500' }}>{a.company}</td>
-                        <td>{a.type}</td>
-                        <td>{a.owner}</td>
-                        {isOverdueView ? (
-                          <>
-                            <td>{a.dueDate}</td>
-                            <td>
-                              {a.diffDays <= 1 && <span style={{ backgroundColor: '#FEF3C7', color: '#D97706', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>1 Day</span>}
-                              {a.diffDays === 2 && <span style={{ backgroundColor: '#FFEDD5', color: '#EA580C', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>2 Days</span>}
-                              {a.diffDays > 2 && a.diffDays <= 5 && <span style={{ backgroundColor: '#FEE2E2', color: '#DC2626', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>{a.diffDays} Days</span>}
-                              {a.diffDays > 5 && <span style={{ backgroundColor: '#FEE2E2', color: '#991B1B', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>7+ Days</span>}
-                            </td>
-                          </>
-                        ) : (
-                          <>
-                            <td>
-                              <span className={`badge ${a.scheduledDate === 'Today' ? 'badge-danger' : a.scheduledDate === 'Tomorrow' ? 'badge-warning' : 'badge-info'}`}>
-                                {a.scheduledDate}
-                              </span>
-                            </td>
-                            <td>{a.scheduledTime}</td>
-                          </>
-                        )}
-                        <td><span className="badge badge-info">{a.priority}</span></td>
-                        <td><span className="badge badge-success">{a.status}</span></td>
-                        <td>
-                          <button 
-                            className="btn-secondary" 
-                            style={{ padding: '2px 8px', fontSize: '12px' }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigate('/leads', { state: { selectedLeadId: a.leadRaw.id } });
-                            }}
-                          >
-                            Open Profile
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {getFilteredModalActivities().length === 0 && (
+                  {modalLoading ? (
+                    <tr>
+                      <td colSpan="10" style={{ textAlign: 'center', padding: '24px', color: 'var(--color-text-muted)' }}>Loading activities...</td>
+                    </tr>
+                  ) : getFilteredModalActivities().length === 0 ? (
                     <tr>
                       <td colSpan="10" style={{ textAlign: 'center', padding: '24px', color: 'var(--color-text-muted)' }}>No activities found.</td>
                     </tr>
+                  ) : (
+                    getFilteredModalActivities().slice((actPage - 1) * actItemsPerPage, actPage * actItemsPerPage).map(a => {
+                      const isOverdueView = activeActivityModal.title === 'Overdue Tasks';
+                      return (
+                        <tr key={a.actId + '-' + (a.leadId || '')} style={{ cursor: 'pointer' }} onClick={() => navigate('/leads', { state: { selectedLeadId: a.leadRaw.id } })}>
+                          <td style={{ color: 'var(--color-primary)', fontWeight: 'bold' }}>{a.actId}</td>
+                          <td style={{ color: 'var(--color-text-muted)', fontWeight: 'bold' }}>{a.leadId}</td>
+                          <td style={{ fontWeight: '500' }}>{a.company}</td>
+                          <td>{a.type}</td>
+                          <td>{a.owner}</td>
+                          {isOverdueView ? (
+                            <>
+                              <td>{a.dueDate}</td>
+                              <td>
+                                {a.diffDays <= 1 && <span style={{ backgroundColor: '#FEF3C7', color: '#D97706', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>1 Day</span>}
+                                {a.diffDays === 2 && <span style={{ backgroundColor: '#FFEDD5', color: '#EA580C', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>2 Days</span>}
+                                {a.diffDays > 2 && a.diffDays <= 5 && <span style={{ backgroundColor: '#FEE2E2', color: '#DC2626', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>{a.diffDays} Days</span>}
+                                {a.diffDays > 5 && <span style={{ backgroundColor: '#FEE2E2', color: '#991B1B', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>7+ Days</span>}
+                              </td>
+                            </>
+                          ) : (
+                            <>
+                              <td>
+                                <span className={`badge ${a.scheduledDate === 'Today' ? 'badge-danger' : a.scheduledDate === 'Tomorrow' ? 'badge-warning' : 'badge-info'}`}>
+                                  {a.scheduledDate}
+                                </span>
+                              </td>
+                              <td>{a.scheduledTime}</td>
+                            </>
+                          )}
+                          <td><span className="badge badge-info">{a.priority}</span></td>
+                          <td><span className="badge badge-success">{a.status}</span></td>
+                          <td>
+                            <button 
+                              className="btn-secondary" 
+                              style={{ padding: '2px 8px', fontSize: '12px' }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate('/leads', { state: { selectedLeadId: a.leadRaw.id } });
+                              }}
+                            >
+                              Open Profile
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>

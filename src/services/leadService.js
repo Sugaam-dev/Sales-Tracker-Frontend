@@ -162,6 +162,8 @@ export async function fetchActivitiesFeed(queryParams = {}) {
         params.append('lead_id', val);
       } else if (key === 'userId') {
         params.append('user_id', val);
+      } else if (key === 'dueStatus') {
+        params.append('due_status', val);
       } else {
         params.append(key, val);
       }
