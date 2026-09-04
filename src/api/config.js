@@ -22,6 +22,8 @@ export const API = {
   CURRENT_USERS: `${BASE_URL}/current_users/`,
   LEADS: `${BASE_URL}/leads`,
   COMMERCIAL: (leadId) => `${BASE_URL}/leads/${leadId}/commercial`,
+  DASHBOARD_SUMMARY: `${BASE_URL}/dashboard/summary`,
+  REPORTS_ANALYTICS: `${BASE_URL}/reports/analytics`,
 };
 
 export const authHeaders = () => {
