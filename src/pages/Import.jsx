@@ -229,13 +229,35 @@ export default function Import() {
     if (e.target.files && e.target.files[0]) {
       handleFile(e.target.files[0]);
     }
+    if (e.target) {
+      e.target.value = '';
+    }
   };
 
   const handleFile = (uploadedFile) => {
     if (uploadedFile.type === 'text/csv' || uploadedFile.name.endsWith('.csv')) {
       setFile(uploadedFile);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     } else {
       alert('Please upload a valid CSV file.');
+    }
+  };
+
+  const handleChangeFile = (e) => {
+    e.stopPropagation();
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleRemoveFile = (e) => {
+    e.stopPropagation();
+    setFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
@@ -284,7 +306,7 @@ export default function Import() {
         const preValidationFailed = [];
 
         const parsedLeads = rawRows.map((row, index) => {
-          const rowNum = index + 2; // Line 1 is header, 0-indexed data starts at Line 2
+          const rowNum = index + 1; // 1-indexed data row (Row 1)
           const mapped = {};
           Object.keys(row).forEach(key => {
             const mappedKey = normalizeKey(key);
@@ -468,13 +490,25 @@ export default function Import() {
             />
             
             {file ? (
-              <div className="file-info">
+              <div className="file-info" onClick={(e) => e.stopPropagation()}>
                 <FileSpreadsheet size={48} className="text-primary" />
                 <h3>{file.name}</h3>
                 <p className="text-muted">{(file.size / 1024).toFixed(2)} KB</p>
-                <div className="mt-4">
+                <div className="file-actions mt-4" style={{ display: 'flex', gap: '10px', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' }}>
                   <button className="btn-primary" onClick={handleStartImport} disabled={isImporting}>
                     {isImporting ? 'Importing...' : 'Start Import'}
+                  </button>
+                  <button type="button" className="btn-secondary" onClick={handleChangeFile} disabled={isImporting}>
+                    Change File
+                  </button>
+                  <button 
+                    type="button" 
+                    className="btn-secondary" 
+                    onClick={handleRemoveFile} 
+                    disabled={isImporting}
+                    style={{ color: 'var(--color-danger)', borderColor: 'var(--color-danger-bg)' }}
+                  >
+                    Remove
                   </button>
                 </div>
               </div>
@@ -547,7 +581,7 @@ export default function Import() {
                             : JSON.stringify(item.errors);
                           return (
                             <li key={idx}>
-                              <strong>Row {item.index + 2} ({item.company || 'Unknown Company'}):</strong> {errString}
+                              <strong>Row {item.index !== undefined ? item.index + 1 : idx + 1} ({item.company || 'Unknown Company'}):</strong> {errString}
                             </li>
                           );
                         })}
