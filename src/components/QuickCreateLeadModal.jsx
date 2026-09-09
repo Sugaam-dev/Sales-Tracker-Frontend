@@ -15,6 +15,19 @@ function countWords(text) {
 }
 
 /**
+ * Returns maximum allowed phone number digits based on selected country code.
+ */
+function getMaxPhoneDigits(countryCode) {
+  const country = String(countryCode || '').toUpperCase();
+  if (country.includes('IN') || country.includes('+91')) return 10;
+  if (country.includes('US') || country.includes('+1')) return 10;
+  if (country.includes('UK') || country.includes('GB') || country.includes('+44')) return 10;
+  if (country.includes('AE') || country.includes('+971')) return 9;
+  if (country.includes('SG') || country.includes('+65')) return 8;
+  return 15;
+}
+
+/**
  * International phone validator respecting selected country and leading zero rule.
  */
 function validatePhoneNumber(phone, countryCode) {
@@ -180,7 +193,27 @@ export default function QuickCreateLeadModal({
 
   const handleChange = (field, val) => {
     setServerError('');
-    const updated = { ...formData, [field]: val };
+    let finalVal = val;
+    let updated = { ...formData };
+
+    if (field === 'phone') {
+      // 1. Do not accept alphabetic or non-numeric characters (keep only digits)
+      const digitsOnly = val.replace(/\D/g, '');
+      // 2. Do not accept values more than the selected country code max length
+      const maxLen = getMaxPhoneDigits(formData.countryCode);
+      finalVal = digitsOnly.slice(0, maxLen);
+      updated = { ...formData, [field]: finalVal };
+    } else if (field === 'countryCode') {
+      // Truncate phone number if it exceeds new country's max allowed length
+      const maxLen = getMaxPhoneDigits(val);
+      const digitsOnly = (formData.phone || '').replace(/\D/g, '');
+      const truncatedPhone = digitsOnly.slice(0, maxLen);
+      updated = { ...formData, countryCode: val, phone: truncatedPhone };
+      finalVal = val;
+    } else {
+      updated = { ...formData, [field]: val };
+    }
+
     setFormData(updated);
 
     // If changing country code, immediately revalidate phone if non-empty
@@ -193,7 +226,7 @@ export default function QuickCreateLeadModal({
 
     // Live error clearing if field was already blurred or has error
     if (touched[field] || errors[field]) {
-      const errorMsg = validateField(field, val, updated);
+      const errorMsg = validateField(field, finalVal, updated);
       setErrors(prev => ({ ...prev, [field]: errorMsg }));
     }
   };
@@ -364,6 +397,7 @@ export default function QuickCreateLeadModal({
                   value={formData.phone}
                   onChange={e => handleChange('phone', e.target.value)}
                   onBlur={() => handleBlur('phone')}
+                  maxLength={getMaxPhoneDigits(formData.countryCode)}
                   className={errors.phone ? 'input-error' : ''}
                   placeholder="Enter contact number"
                   style={{ flex: 1 }}
