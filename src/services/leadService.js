@@ -175,6 +175,10 @@ export async function fetchActivitiesFeed(queryParams = {}) {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(data.message || 'Failed to fetch activities feed.');
+  }
+  return data;
+}
+
 export async function fetchDashboardSummary(queryParams = {}) {
   const params = new URLSearchParams();
   Object.keys(queryParams).forEach((key) => {
@@ -215,6 +219,10 @@ export async function fetchActivitiesSummary() {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(data.message || 'Failed to fetch activities summary.');
+  }
+  return data;
+}
+
 export async function fetchReportsAnalytics(queryParams = {}) {
   const params = new URLSearchParams();
   Object.keys(queryParams).forEach((key) => {

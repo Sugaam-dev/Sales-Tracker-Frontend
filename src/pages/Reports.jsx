@@ -8,8 +8,20 @@ import LeadHeatMap from './LeadHeatMap';
 import { fetchReportsAnalytics } from '../services/leadService';
 import './Reports.css';
 
+const CACHE_KEY = 'sales_crm_cached_reports_analytics';
+
 export default function Reports() {
-  const [loading, setLoading] = useState(true);
+  const [cachedData] = useState(() => {
+    try {
+      const item = sessionStorage.getItem(CACHE_KEY);
+      return item ? JSON.parse(item) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const [loading, setLoading] = useState(!cachedData);
+  const [isBackgroundUpdating, setIsBackgroundUpdating] = useState(false);
   const [error, setError] = useState(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [isAiExpanded, setIsAiExpanded] = useState(() => {
@@ -17,25 +29,28 @@ export default function Reports() {
     return saved !== null ? JSON.parse(saved) : true;
   });
 
-  const [reportsData, setReportsData] = useState({
-    revenue_summary: {
-      total_revenue: 0,
-      current_period_revenue: 0,
-      previous_period_revenue: 0,
-      growth_percent: 0,
-      revenue_momentum_text: '+0.0% MoM'
-    },
-    conversion_analytics: {
-      win_rate_percent: 0,
-      avg_sales_cycle_days: 0,
-      won_count: 0,
-      lost_count: 0
-    },
-    pipeline_by_stage: [],
-    pipeline_by_region: [],
-    rep_performance: [],
-    activity_breakdown: [],
-    priority_breakdown: []
+  const [reportsData, setReportsData] = useState(() => {
+    if (cachedData) return cachedData;
+    return {
+      revenue_summary: {
+        total_revenue: 0,
+        current_period_revenue: 0,
+        previous_period_revenue: 0,
+        growth_percent: 0,
+        revenue_momentum_text: '+0.0% MoM'
+      },
+      conversion_analytics: {
+        win_rate_percent: 0,
+        avg_sales_cycle_days: 0,
+        won_count: 0,
+        lost_count: 0
+      },
+      pipeline_by_stage: [],
+      pipeline_by_region: [],
+      rep_performance: [],
+      activity_breakdown: [],
+      priority_breakdown: []
+    };
   });
 
   useEffect(() => {
@@ -44,21 +59,34 @@ export default function Reports() {
 
   useEffect(() => {
     let isMounted = true;
+    if (cachedData) {
+      setIsBackgroundUpdating(true);
+    }
     fetchReportsAnalytics()
       .then((resp) => {
         if (isMounted && resp && resp.data) {
           setReportsData(resp.data);
           setError(null);
+          try {
+            sessionStorage.setItem(CACHE_KEY, JSON.stringify(resp.data));
+          } catch (e) {
+            console.warn('Failed to cache reports data', e);
+          }
         }
       })
       .catch((err) => {
         if (isMounted) {
           console.error('Failed to load reports analytics:', err);
-          setError(err.message || 'Failed to load reports analytics.');
+          if (!cachedData) {
+            setError(err.message || 'Failed to load reports analytics.');
+          }
         }
       })
       .finally(() => {
-        if (isMounted) setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+          setIsBackgroundUpdating(false);
+        }
       });
 
     return () => {
@@ -73,6 +101,11 @@ export default function Reports() {
         if (resp && resp.data) {
           setReportsData(resp.data);
           setError(null);
+          try {
+            sessionStorage.setItem(CACHE_KEY, JSON.stringify(resp.data));
+          } catch (e) {
+            console.warn('Failed to cache reports data', e);
+          }
         }
       })
       .catch(console.error)
@@ -174,7 +207,14 @@ export default function Reports() {
     <div className="reports-container">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
         <h1 className="page-title" style={{ margin: 0 }}>Reports &amp; Analytics</h1>
-        {loading && <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Loading analytics...</span>}
+        {isBackgroundUpdating ? (
+          <span className="ai-pulse-indicator">
+            <RefreshCw size={13} style={{ animation: 'rotateSparkle 1.5s infinite linear' }} />
+            Updating live data...
+          </span>
+        ) : loading ? (
+          <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Loading analytics...</span>
+        ) : null}
       </div>
 
       {error && (
@@ -183,6 +223,38 @@ export default function Reports() {
           <button onClick={handleRefreshAi} style={{ background: 'none', border: 'none', color: '#DC2626', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>Retry</button>
         </div>
       )}
+
+      {loading && !cachedData ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', marginTop: '16px' }}>
+          <div className="reports-skeleton-card" style={{ height: '140px' }}>
+            <div className="skeleton-shimmer" style={{ width: '40%', height: '24px' }}></div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', flex: 1 }}>
+              <div className="skeleton-shimmer" style={{ height: '100%' }}></div>
+              <div className="skeleton-shimmer" style={{ height: '100%' }}></div>
+              <div className="skeleton-shimmer" style={{ height: '100%' }}></div>
+            </div>
+          </div>
+          <div className="charts-grid">
+            <div className="reports-skeleton-card">
+              <div className="skeleton-shimmer" style={{ width: '35%', height: '20px' }}></div>
+              <div className="skeleton-shimmer" style={{ flex: 1 }}></div>
+            </div>
+            <div className="reports-skeleton-card">
+              <div className="skeleton-shimmer" style={{ width: '35%', height: '20px' }}></div>
+              <div className="skeleton-shimmer" style={{ flex: 1 }}></div>
+            </div>
+            <div className="reports-skeleton-card">
+              <div className="skeleton-shimmer" style={{ width: '35%', height: '20px' }}></div>
+              <div className="skeleton-shimmer" style={{ flex: 1 }}></div>
+            </div>
+            <div className="reports-skeleton-card">
+              <div className="skeleton-shimmer" style={{ width: '35%', height: '20px' }}></div>
+              <div className="skeleton-shimmer" style={{ flex: 1 }}></div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
 
       {/* AI Summary Card for Reports */}
       <div className="card ai-summary-premium-card" style={{ marginTop: '16px' }}>
@@ -403,6 +475,8 @@ export default function Reports() {
           </table>
         </div>
       </div>
-    </div>
+    </>
+  )}
+</div>
   );
 }
