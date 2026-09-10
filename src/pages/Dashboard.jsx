@@ -1,43 +1,106 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { DollarSign, Percent, AlertCircle, CheckCircle2, Clock, X, Sparkles, RefreshCw, Trash2, Edit2, PlusCircle, ChevronUp, ChevronDown } from 'lucide-react';
+import { DollarSign, Percent, AlertCircle, CheckCircle2, X, Sparkles, RefreshCw, Trash2, Edit2, PlusCircle, ChevronUp, ChevronDown } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import KpiCard from '../components/KpiCard';
 import { initialLeadsData } from './mockLeads';
-import { fetchTasks, createTask, updateTaskStatus, deleteTask } from '../services/leadService';
+import { fetchDashboardSummary, fetchLeads, fetchCurrentUsers, fetchTasks, createTask, updateTaskStatus, deleteTask } from '../services/leadService';
 import './Dashboard.css';
 
 export default function Dashboard() {
   const [activeKpiModal, setActiveKpiModal] = useState(null);
   const navigate = useNavigate();
 
+  // API State
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [dashboardData, setDashboardData] = useState({
+    pipeline_value: 0,
+    open_deals_count: 0,
+    expected_value: 0,
+    overdue_count: 0,
+    won_leads_count: 0,
+    lost_leads_count: 0,
+    stage_distribution: [],
+    region_distribution: []
+  });
+
+  // Filters State
+  const [ownerFilter, setOwnerFilter] = useState('');
+  const [regionFilter, setRegionFilter] = useState('');
+  const [usersList, setUsersList] = useState([]);
+
   const [isAiExpanded, setIsAiExpanded] = useState(() => {
     const saved = sessionStorage.getItem('isAiExpanded');
     return saved !== null ? JSON.parse(saved) : true;
   });
 
-  React.useEffect(() => {
+  useEffect(() => {
     sessionStorage.setItem('isAiExpanded', JSON.stringify(isAiExpanded));
   }, [isAiExpanded]);
 
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiInsights, setAiInsights] = useState([
-    { icon: '🚀', text: 'Pipeline value increased by 14% this week due to Stark Industries deal sizing.', type: 'trend', badge: 'Revenue Up' },
-    { icon: '🔥', text: 'Quantum Tech is ready for closing; schedule the Negotiation review today.', type: 'action', badge: 'Hot Deal' },
-    { icon: '🔥', text: 'Zenith Financial has proposal active; high conversion likelihood predicted (75%).', type: 'action', badge: 'Action Recommended' },
-    { icon: '⚠️', text: 'Action required: 4 follow-up activities are pending for this week.', type: 'alert', badge: 'Tasks Pending' }
+    { icon: '🚀', text: 'Pipeline value tracking active deals in real-time from the database.', type: 'trend', badge: 'Revenue Active' },
+    { icon: '🔥', text: 'High probability deals in Proposal & Negotiation ready for closing.', type: 'action', badge: 'Hot Deals' },
+    { icon: '⚠️', text: 'Check overdue activities and follow-ups to maintain deal velocity.', type: 'alert', badge: 'Action Required' }
   ]);
+
+  useEffect(() => {
+    fetchCurrentUsers().then(resp => {
+      if (resp && resp.data) setUsersList(resp.data);
+    }).catch(err => console.error('Failed to load users for filter:', err));
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+    const queryParams = {};
+    if (ownerFilter) queryParams.owner = ownerFilter;
+    if (regionFilter) queryParams.region = regionFilter;
+
+    fetchDashboardSummary(queryParams)
+      .then((resp) => {
+        if (isMounted && resp && resp.data) {
+          setDashboardData(resp.data);
+          setError(null);
+        }
+      })
+      .catch((err) => {
+        if (isMounted) {
+          console.error('Failed to load dashboard summary:', err);
+          setError(err.message || 'Failed to load dashboard summary.');
+        }
+      })
+      .finally(() => {
+        if (isMounted) setLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [ownerFilter, regionFilter]);
 
   const handleRefreshAi = () => {
     setIsAiLoading(true);
-    setTimeout(() => {
-      setIsAiLoading(false);
-      setAiInsights([
-        { icon: '🚀', text: 'Stark Industries and Wayne Enterprises represent 36% of your active pipeline.', type: 'trend', badge: 'Insights' },
-        { icon: '🔥', text: 'Zenith Financial has proposal active; high conversion likelihood predicted (75%).', type: 'action', badge: 'Action Recommended' },
-        { icon: '⚠️', text: 'Action required: 4 follow-up activities are pending for this week.', type: 'alert', badge: 'Tasks Pending' }
-      ]);
-    }, 1500);
+    const queryParams = {};
+    if (ownerFilter) queryParams.owner = ownerFilter;
+    if (regionFilter) queryParams.region = regionFilter;
+
+    fetchDashboardSummary(queryParams)
+      .then((resp) => {
+        if (resp && resp.data) {
+          setDashboardData(resp.data);
+        }
+      })
+      .catch(console.error)
+      .finally(() => {
+        setIsAiLoading(false);
+        setAiInsights([
+          { icon: '🚀', text: `Active pipeline value: $${(dashboardData.pipeline_value || 0).toLocaleString()} across ${dashboardData.open_deals_count || 0} open deals.`, type: 'trend', badge: 'Live Insights' },
+          { icon: '🔥', text: `Expected close value estimated at $${(dashboardData.expected_value || 0).toLocaleString()} based on stage probabilities.`, type: 'action', badge: 'Forecast' },
+          { icon: '⚠️', text: `${dashboardData.overdue_count || 0} tasks or follow-ups require immediate attention.`, type: 'alert', badge: 'Tasks Pending' }
+        ]);
+      });
   };
 
   // Task To-Do list state
@@ -164,166 +227,123 @@ export default function Dashboard() {
     setIsAddingTask(true);
   };
 
-  const wonLeads = initialLeadsData.filter(l => l.status === 'Won').map(l => ({
-    id: `L-${l.id.toString().padStart(4, '0')}`,
-    company: l.company,
-    owner: l.owner,
-    contact: l.contact,
-    stage: 'Won',
-    value: l.value,
-    wonDate: l.history?.find(h => h.action === 'Deal Won')?.date || l.estDate,
-    duration: '35 Days'
+  // Stage Colors Mapping
+  const defaultStageColors = {
+    'Prospecting': '#93C5FD',
+    'Qualification': '#A7F3D0',
+    'Initial Discussion': '#99F6E4',
+    'Needs Analysis': '#FDE68A',
+    'Proposal': '#C7D2FE',
+    'Negotiation': '#FBCFE8',
+    'Closed Won': '#34D399',
+    'Closed Lost': '#F87171'
+  };
+
+  const pipelineStageData = (dashboardData.stage_distribution || []).map(stg => ({
+    name: stg.name,
+    deals: stg.deals !== undefined ? stg.deals : (stg.count || 0),
+    fill: stg.fill || defaultStageColors[stg.name] || '#93C5FD'
   }));
 
-  const closedLostLeads = initialLeadsData.filter(l => l.status === 'Lost').map(l => ({
-    id: `L-${l.id.toString().padStart(4, '0')}`,
-    company: l.company,
-    owner: l.owner,
-    contact: l.contact,
-    stage: 'Closed Lost',
-    value: l.value,
-    lostDate: l.history?.find(h => h.action === 'Deal Lost')?.date || l.estDate,
-    reason: l.lostReason || 'Budget Constraints'
+  const regions = (dashboardData.region_distribution || []).map(r => ({
+    name: r.name,
+    percent: r.percent !== undefined ? r.percent : (r.count || 0),
+    value: r.value,
+    count: r.count
   }));
 
-  const openLeads = initialLeadsData.filter(l => l.status !== 'Won' && l.status !== 'Lost');
-
-  const overdueTasks = initialLeadsData.filter(l => l.isOverdue || (l.status !== 'Won' && l.status !== 'Lost' && new Date(l.estDate) < new Date('2026-07-07'))).map(l => {
-    let taskName = 'Follow-up Call';
-    if (l.stage === 'Qualification') taskName = 'Qualification Review';
-    if (l.stage === 'Needs Analysis') taskName = 'Requirements Gathering';
-    if (l.stage === 'Proposal') taskName = 'Proposal Discussion';
-    if (l.stage === 'Negotiation') taskName = 'Contract Negotiation';
-    
-    const diffTime = Math.abs(new Date('2026-07-07') - new Date(l.estDate));
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    return {
-      id: `L-${l.id.toString().padStart(4, '0')}`,
-      company: l.company,
-      owner: l.owner,
-      task: taskName,
-      dueDate: l.estDate,
-      overdue: `${diffDays} Days`,
-      priority: l.priority || 'High'
-    };
-  });
-
-  const upcomingTasks = initialLeadsData.filter(l => l.status !== 'Won' && l.status !== 'Lost' && new Date(l.estDate) >= new Date('2026-07-07')).map(l => {
-    let taskName = 'Discovery Call';
-    if (l.stage === 'Proposal') taskName = 'Proposal Review';
-    if (l.stage === 'Negotiation') taskName = 'Contract Discussion';
-    if (l.stage === 'Needs Analysis') taskName = 'Product Demo';
-
-    const diffTime = new Date(l.estDate) - new Date('2026-07-07');
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    let dueDateStr = `${diffDays} Days`;
-    if (diffDays === 0) dueDateStr = 'Today';
-    else if (diffDays === 1) dueDateStr = 'Tomorrow';
-    else dueDateStr = `Due in ${diffDays} Days`;
-
-    return {
-      id: `L-${l.id.toString().padStart(4, '0')}`,
-      company: l.company,
-      owner: l.owner,
-      task: taskName,
-      dueDate: dueDateStr,
-      priority: l.priority || 'Normal',
-      contact: l.contact
-    };
-  });
-
-  const totalPipelineVal = openLeads.reduce((sum, l) => {
-    const val = parseInt(l.value.replace(/[^0-9]/g, ''), 10) || 0;
-    return sum + val;
-  }, 0);
-  
-  const expectedPipelineVal = openLeads.reduce((sum, l) => {
-    const val = parseInt(l.value.replace(/[^0-9]/g, ''), 10) || 0;
-    const prob = l.prob || 0;
-    return sum + (val * (prob / 100));
-  }, 0);
-
-  const stagesList = [
-    { name: 'Prospecting', fill: '#93C5FD' },
-    { name: 'Qualification', fill: '#A7F3D0' },
-    { name: 'Initial Discussion', fill: '#99F6E4' },
-    { name: 'Needs Analysis', fill: '#FDE68A' },
-    { name: 'Proposal', fill: '#C7D2FE' },
-    { name: 'Negotiation', fill: '#FBCFE8' },
-    { name: 'Closed Won', fill: '#34D399' },
-    { name: 'Closed Lost', fill: '#F87171' }
-  ];
-
-  const pipelineStageData = stagesList.map(stg => {
-    const count = initialLeadsData.filter(l => l.stage === stg.name).length;
-    return { name: stg.name, deals: count, fill: stg.fill };
-  });
-
-  const totalLeadsCount = initialLeadsData.length || 1;
-  const regionNames = ['North America', 'Europe', 'Asia Pacific', 'LATAM', 'India'];
-  const regions = regionNames.map(name => {
-    const count = initialLeadsData.filter(l => l.region === name).length;
-    const percent = Math.round((count / totalLeadsCount) * 100);
-    return { name, percent };
-  });
+  const totalPipelineVal = dashboardData.pipeline_value || 0;
+  const expectedPipelineVal = dashboardData.expected_value || 0;
+  const openDealsCount = dashboardData.open_deals_count || 0;
+  const overdueCount = dashboardData.overdue_count || 0;
+  const wonCount = dashboardData.won_leads_count || 0;
+  const lostCount = dashboardData.lost_leads_count || 0;
 
   const kpiData = [
-    { title: 'Total Pipeline ', value: `$${totalPipelineVal.toLocaleString()}`, subtext: `${openLeads.length} open deals`, icon: <DollarSign size={18} />, color: '#1D4ED8' },
+    { title: 'Total Pipeline ', value: `$${totalPipelineVal.toLocaleString()}`, subtext: `${openDealsCount} open deals`, icon: <DollarSign size={18} />, color: '#1D4ED8' },
     { title: 'Expected Value ', value: `$${expectedPipelineVal.toLocaleString()}`, subtext: 'Based on probability', icon: <Percent size={18} />, color: '#10B981' },
-    { title: 'Overdue Tasks ', value: `${overdueTasks.length}`, subtext: 'Requires immediate action', icon: <AlertCircle size={18} />, color: '#EF4444' },
-    { title: 'Won Leads ', value: `${wonLeads.length}`, subtext: 'Year to date', icon: <CheckCircle2 size={18} />, color: '#F59E0B' },
-    { title: 'Closed Lost ', value: `${closedLostLeads.length}`, subtext: 'Year to date', icon: <X size={18} />, color: '#DC2626' }
+    { title: 'Overdue Tasks ', value: `${overdueCount}`, subtext: 'Requires immediate action', icon: <AlertCircle size={18} />, color: '#EF4444' },
+    { title: 'Won Leads ', value: `${wonCount}`, subtext: 'Year to date', icon: <CheckCircle2 size={18} />, color: '#F59E0B' },
+    { title: 'Closed Lost ', value: `${lostCount}`, subtext: 'Year to date', icon: <X size={18} />, color: '#DC2626' }
   ];
 
-  const handleKpiClick = (title) => {
-    if (title === 'Total Pipeline') {
-      const openDeadsList = openLeads.map(l => `${l.company} - ${l.value}`);
-      setActiveKpiModal({ title: `${openLeads.length} Open Deals ($${totalPipelineVal.toLocaleString()})`, data: openDeadsList });
-    } else if (title === 'Expected Value') {
-      const expectedBreakdown = openLeads.map(l => `${l.company} (${l.prob || 0}%) - $${( (parseInt(l.value.replace(/[^0-9]/g, ''), 10) || 0) * ((l.prob || 0)/100) ).toLocaleString()}`);
-      setActiveKpiModal({ title: `Expected Value Breakdown ($${expectedPipelineVal.toLocaleString()})`, data: expectedBreakdown });
-    } else if (title === 'Overdue Tasks') {
-      setActiveKpiModal({ title: `${overdueTasks.length} Overdue Tasks`, data: overdueTasks });
-    } else if (title === 'Won Leads') {
-      setActiveKpiModal({ title: `${wonLeads.length} Won Leads`, data: wonLeads });
-    } else if(title==="Closed Lost"){
-      setActiveKpiModal({ title:`${closedLostLeads.length} Closed Lost Leads`,data:closedLostLeads });
+  const handleKpiClick = async (title) => {
+    try {
+      if (title.includes('Total Pipeline')) {
+        const resp = await fetchLeads({ limit: 50 });
+        const open = (resp.data || []).filter(l => l.status !== 'Won' && l.status !== 'Lost');
+        const list = open.map(l => `${l.company} - $${(l.value || 0).toLocaleString()}`);
+        setActiveKpiModal({ title: `${open.length} Open Deals ($${totalPipelineVal.toLocaleString()})`, data: list });
+      } else if (title.includes('Expected Value')) {
+        const resp = await fetchLeads({ limit: 50 });
+        const open = (resp.data || []).filter(l => l.status !== 'Won' && l.status !== 'Lost');
+        const list = open.map(l => `${l.company} (${l.stage || 'Open'}) - $${(l.value || 0).toLocaleString()}`);
+        setActiveKpiModal({ title: `Expected Value Breakdown ($${expectedPipelineVal.toLocaleString()})`, data: list });
+      } else if (title.includes('Overdue Tasks')) {
+        const resp = await fetchLeads({ limit: 50 });
+        const open = (resp.data || []).filter(l => l.status !== 'Won' && l.status !== 'Lost');
+        const overdue = open.map(l => ({
+          id: l.leadId || `L-${l.id}`,
+          company: l.company,
+          owner: l.owner || 'Unassigned',
+          task: 'Follow-up Required',
+          dueDate: l.estimatedRequirementDate || l.nextFollowUp || 'Past Due',
+          overdue: 'Action Pending',
+          priority: l.priority || 'High'
+        }));
+        setActiveKpiModal({ title: `${overdue.length} Overdue Actions`, data: overdue });
+      } else if (title.includes('Won Leads')) {
+        const resp = await fetchLeads({ stage: 'Closed Won', limit: 50 });
+        const list = (resp.data || []).map(l => ({
+          id: l.leadId || `L-${l.id}`,
+          company: l.company,
+          owner: l.owner || 'Unassigned',
+          contact: l.contact || 'N/A',
+          stage: 'Won',
+          value: `$${(l.value || 0).toLocaleString()}`,
+          wonDate: l.updatedAt ? l.updatedAt.substring(0, 10) : 'Recent',
+          duration: 'Closed'
+        }));
+        setActiveKpiModal({ title: `${list.length} Won Leads`, data: list });
+      } else if (title.includes('Closed Lost')) {
+        const resp = await fetchLeads({ stage: 'Closed Lost', limit: 50 });
+        const list = (resp.data || []).map(l => ({
+          id: l.leadId || `L-${l.id}`,
+          company: l.company,
+          owner: l.owner || 'Unassigned',
+          contact: l.contact || 'N/A',
+          stage: 'Closed Lost',
+          value: `$${(l.value || 0).toLocaleString()}`,
+          lostDate: l.updatedAt ? l.updatedAt.substring(0, 10) : 'Recent',
+          reason: l.lostReason || 'Not Specified'
+        }));
+        setActiveKpiModal({ title: `${list.length} Closed Lost Leads`, data: list });
+      }
+    } catch (err) {
+      console.error('Failed to load drilldown data:', err);
     }
   };
-  const handleRegionClick = (regionName) => {
-    const leadsByRegion = {
-      'North America': [
-        { id: 'L-0015', company: 'Horizon Retail', value: '$45,000', stage: 'Proposal', contact: 'David Smith', owner: 'Alex Johnson' },
-        { id: 'L-0022', company: 'NovaMed Healthcare', value: '$85,000', stage: 'Needs Analysis', contact: 'Jennifer Wu', owner: 'Sarah Jenkins' },
-        { id: 'L-0028', company: 'Quantum Tech', value: '$210,000', stage: 'Negotiation', contact: 'Alex Rodriguez', owner: 'Debabrata Ghosh' },
-        { id: 'L-0023', company: 'Acme Corp', value: '$55,000', stage: 'Qualification', contact: 'John Doe', owner: 'Sarah Jenkins' },
-        { id: 'L-0019', company: 'Wayne Enterprises', value: '$190,000', stage: 'Negotiation', contact: 'Lucius Fox', owner: 'David Miller' },
-        { id: 'L-0030', company: 'Stark Industries', value: '$100,000', stage: 'Proposal', contact: 'Pepper Potts', owner: 'Sanjay Mishra' }
-      ],
-      'Europe': [
-        { id: 'L-0016', company: 'Zenith Financial', value: '$120,000', stage: 'Negotiation', contact: 'Alice Cooper', owner: 'Sarah Jenkins' },
-        { id: 'L-0018', company: 'Globex Inc', value: '$210,000', stage: 'Won', contact: 'Hank Scorpio', owner: 'Sarah Jenkins' }
-      ],
-      'Asia Pacific': [
-        { id: 'L-0004', company: 'Initech', value: '$350,000', stage: 'Won', contact: 'Peter Gibbons', owner: 'Alex Johnson' },
-        { id: 'L-0012', company: 'GlobalTech Solutions', value: '$150,000', stage: 'Proposal', contact: 'Paul Allen', owner: 'Sarah Jenkins' },
-        { id: 'L-0008', company: 'Pinnacle Consulting', value: '$90,000', stage: 'Prospecting', contact: 'Jane Smith', owner: 'Alex Johnson' }
-      ],
-      'LATAM': [
-        { id: 'L-0005', company: 'EcoLogistics', value: '$30,000', stage: 'Prospecting', contact: 'David Smith', owner: 'Sanjay Mishra' }
-      ],
-      'India': [
-        { id: 'L-0010', company: 'Mock Company India', value: '$75,000', stage: 'Qualification', contact: 'Contact Tech', owner: 'Sanjay Mishra' }
-      ]
-    };
 
-    const data = leadsByRegion[regionName] || [];
-    setActiveKpiModal({
-      title: `${regionName} Region - Lead List`,
-      data: data
-    });
+  const handleRegionClick = async (regionName) => {
+    try {
+      const resp = await fetchLeads({ limit: 50 });
+      const regionLeads = (resp.data || []).filter(l => l.region && l.region.toLowerCase() === regionName.toLowerCase()).map(l => ({
+        id: l.leadId || `L-${l.id}`,
+        company: l.company,
+        value: `$${(l.value || 0).toLocaleString()}`,
+        stage: l.stage || 'Open',
+        contact: l.contact || 'N/A',
+        owner: l.owner || 'Unassigned'
+      }));
+      setActiveKpiModal({
+        title: `${regionName} Region - Lead List`,
+        data: regionLeads
+      });
+    } catch (err) {
+      console.error('Failed to load region drilldown:', err);
+    }
   };
+
   const handleModalItemClick = (item) => {
     let companyName = "";
     let leadId = null;
@@ -356,7 +376,43 @@ export default function Dashboard() {
   return (
     <div className="dashboard-container">
         {/* Dashboard Header */}
-        <h1 className="page-title"> Dashboard </h1>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+          <h1 className="page-title" style={{ margin: 0 }}> Dashboard </h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {usersList.length > 0 && (
+              <select
+                value={ownerFilter}
+                onChange={(e) => setOwnerFilter(e.target.value)}
+                style={{ padding: '6px 12px', fontSize: '13px', borderRadius: '6px', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-surface)', color: 'var(--color-text-main)' }}
+              >
+                <option value="">All Owners</option>
+                {usersList.map((u, i) => (
+                  <option key={i} value={u.name || u.email}>{u.name || u.email}</option>
+                ))}
+              </select>
+            )}
+            <select
+              value={regionFilter}
+              onChange={(e) => setRegionFilter(e.target.value)}
+              style={{ padding: '6px 12px', fontSize: '13px', borderRadius: '6px', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-surface)', color: 'var(--color-text-main)' }}
+            >
+              <option value="">All Regions</option>
+              <option value="North America">North America</option>
+              <option value="Europe">Europe</option>
+              <option value="Asia Pacific">Asia Pacific</option>
+              <option value="LATAM">LATAM</option>
+              <option value="India">India</option>
+            </select>
+            {loading && <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Updating...</span>}
+          </div>
+        </div>
+
+        {error && (
+          <div style={{ padding: '12px 16px', backgroundColor: '#FEF2F2', border: '1px solid #F87171', borderRadius: '8px', color: '#991B1B', fontSize: '13px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>{error}</span>
+            <button onClick={handleRefreshAi} style={{ background: 'none', border: 'none', color: '#DC2626', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>Retry</button>
+          </div>
+        )}
 
         {/* KPI Cards */}
         <div className="kpi-grid">
@@ -602,30 +658,29 @@ export default function Dashboard() {
                     <h3>Overdue Actions</h3>
                 </div>
                 <div className="task-list">
-                    {overdueTasks.map((task) => (
+                    {overdueCount === 0 ? (
+                        <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>
+                          No overdue actions pending.
+                        </div>
+                    ) : (
                         <div
-                            key={task.id}
                             className="task-item overdue"
-                            onClick={() =>
-                                setActiveKpiModal({
-                                    title: `${task.company} - Overdue Task`,
-                                    data: [task]
-                                })
-                            }
+                            onClick={() => handleKpiClick('Overdue Tasks')}
+                            style={{ cursor: 'pointer' }}
                         >
                             <div className="task-icon">
                                 <AlertCircle size={16} />
                             </div>
                             <div className="task-info">
                                 <p className="task-title">
-                                    {task.company}
+                                    {overdueCount} Actions Pending Attention
                                 </p>
                                 <span className="overdue-text">
-                                    {task.overdue} Overdue
+                                    Requires Immediate Review
                                 </span>
                             </div>
                         </div>
-                    ))}
+                    )}
                 </div>
             </div>
         </div>

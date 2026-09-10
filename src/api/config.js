@@ -23,6 +23,11 @@ export const API = {
   LEADS: `${BASE_URL}/leads`,
   TASKS: `${BASE_URL}/tasks`,
   HEAT_MAP: `${BASE_URL}/reports/heat-map`,
+  COMMERCIAL: (leadId) => `${BASE_URL}/leads/${leadId}/commercial`,
+  ACTIVITIES: `${BASE_URL}/activities`,
+  ACTIVITIES_SUMMARY: `${BASE_URL}/activities/summary`,
+  DASHBOARD_SUMMARY: `${BASE_URL}/dashboard/summary`,
+  REPORTS_ANALYTICS: `${BASE_URL}/reports/analytics`,
 };
 
 export const authHeaders = () => {

@@ -1,129 +1,263 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
   PieChart, Pie, Legend as RechartsLegend,
 } from 'recharts';
 import { Sparkles, RefreshCw, ChevronUp, ChevronDown } from 'lucide-react';
 import LeadHeatMap from './LeadHeatMap';
-import { initialLeadsData } from './mockLeads';
+import { fetchReportsAnalytics } from '../services/leadService';
 import './Reports.css';
 
+const CACHE_KEY = 'sales_crm_cached_reports_analytics';
+
 export default function Reports() {
+  const [cachedData] = useState(() => {
+    try {
+      const item = sessionStorage.getItem(CACHE_KEY);
+      return item ? JSON.parse(item) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const [loading, setLoading] = useState(!cachedData);
+  const [isBackgroundUpdating, setIsBackgroundUpdating] = useState(false);
+  const [error, setError] = useState(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [isAiExpanded, setIsAiExpanded] = useState(() => {
     const saved = sessionStorage.getItem('isAiExpanded_reports');
     return saved !== null ? JSON.parse(saved) : true;
   });
 
+  const [reportsData, setReportsData] = useState(() => {
+    if (cachedData) return cachedData;
+    return {
+      revenue_summary: {
+        total_revenue: 0,
+        current_period_revenue: 0,
+        previous_period_revenue: 0,
+        growth_percent: 0,
+        revenue_momentum_text: '+0.0% MoM'
+      },
+      conversion_analytics: {
+        win_rate_percent: 0,
+        avg_sales_cycle_days: 0,
+        won_count: 0,
+        lost_count: 0
+      },
+      pipeline_by_stage: [],
+      pipeline_by_region: [],
+      rep_performance: [],
+      activity_breakdown: [],
+      priority_breakdown: []
+    };
+  });
+
   useEffect(() => {
     sessionStorage.setItem('isAiExpanded_reports', JSON.stringify(isAiExpanded));
   }, [isAiExpanded]);
 
+  useEffect(() => {
+    let isMounted = true;
+    if (cachedData) {
+      setIsBackgroundUpdating(true);
+    }
+    fetchReportsAnalytics()
+      .then((resp) => {
+        if (isMounted && resp && resp.data) {
+          setReportsData(resp.data);
+          setError(null);
+          try {
+            sessionStorage.setItem(CACHE_KEY, JSON.stringify(resp.data));
+          } catch (e) {
+            console.warn('Failed to cache reports data', e);
+          }
+        }
+      })
+      .catch((err) => {
+        if (isMounted) {
+          console.error('Failed to load reports analytics:', err);
+          if (!cachedData) {
+            setError(err.message || 'Failed to load reports analytics.');
+          }
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setLoading(false);
+          setIsBackgroundUpdating(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const handleRefreshAi = () => {
     setIsAiLoading(true);
-    setTimeout(() => {
-      setIsAiLoading(false);
-    }, 1000);
+    fetchReportsAnalytics()
+      .then((resp) => {
+        if (resp && resp.data) {
+          setReportsData(resp.data);
+          setError(null);
+          try {
+            sessionStorage.setItem(CACHE_KEY, JSON.stringify(resp.data));
+          } catch (e) {
+            console.warn('Failed to cache reports data', e);
+          }
+        }
+      })
+      .catch(console.error)
+      .finally(() => {
+        setIsAiLoading(false);
+      });
   };
 
-  const stagesList = [
-    { name: 'Prospecting', fill: '#93C5FD' },
-    { name: 'Qualification', fill: '#A7F3D0' },
-    { name: 'Initial Discussion', fill: '#99F6E4' },
-    { name: 'Needs Analysis', fill: '#FDE68A' },
-    { name: 'Proposal', fill: '#C7D2FE' },
-    { name: 'Negotiation', fill: '#FBCFE8' },
-    { name: 'Closed Won', fill: '#34D399' },
-    { name: 'Closed Lost', fill: '#F87171' }
-  ];
+  const defaultStageColors = {
+    'Prospecting': '#93C5FD',
+    'Qualification': '#A7F3D0',
+    'Initial Discussion': '#99F6E4',
+    'Needs Analysis': '#FDE68A',
+    'Proposal': '#C7D2FE',
+    'Negotiation': '#FBCFE8',
+    'Closed Won': '#34D399',
+    'Closed Lost': '#F87171'
+  };
 
-  const pipelineStageData = stagesList.map(stg => {
-    const valueSum = initialLeadsData
-      .filter(l => l.stage === stg.name)
-      .reduce((sum, l) => sum + (parseInt(l.value.replace(/[^0-9]/g, ''), 10) || 0), 0);
-    return { name: stg.name, value: valueSum, fill: stg.fill };
-  });
+  const pipelineStageData = (reportsData.pipeline_by_stage || []).map(stg => ({
+    name: stg.name,
+    value: stg.value !== undefined ? stg.value : (stg.deals || 0),
+    fill: stg.fill || defaultStageColors[stg.name] || '#93C5FD'
+  }));
 
-  const totalValueSum = initialLeadsData.reduce((sum, l) => sum + (parseInt(l.value.replace(/[^0-9]/g, ''), 10) || 0), 0) || 1;
   const regionColors = {
     'North America': '#1D4ED8',
     'Europe': '#0EA5E9',
+    'EMEA': '#0EA5E9',
     'Asia Pacific': '#14B8A6',
+    'APAC': '#14B8A6',
     'LATAM': '#F59E0B',
     'India': '#8B5CF6'
   };
-  const regionNames = ['North America', 'Europe', 'Asia Pacific', 'LATAM', 'India'];
-  const regionData = regionNames.map(name => {
-    const valueSum = initialLeadsData
-      .filter(l => l.region === name)
-      .reduce((sum, l) => sum + (parseInt(l.value.replace(/[^0-9]/g, ''), 10) || 0), 0);
-    const percent = Math.round((valueSum / totalValueSum) * 100);
-    return { name: name === 'Europe' ? 'EMEA' : name === 'Asia Pacific' ? 'APAC' : name, value: percent, fill: regionColors[name] || '#6B7280' };
-  });
 
-  const callsCount = initialLeadsData.filter(l => ['Cold Call', 'Referral', 'Partner'].includes(l.source)).length;
-  const emailsCount = initialLeadsData.filter(l => ['LinkedIn', 'Outbound', 'Newsletter'].includes(l.source)).length;
-  const meetingsCount = initialLeadsData.filter(l => ['Webinar', 'Event', 'Conference'].includes(l.source)).length;
-  const demosCount = initialLeadsData.filter(l => ['Website', 'Web', 'Google', 'Direct'].includes(l.source)).length;
-  const totalAct = (callsCount + emailsCount + meetingsCount + demosCount) || 1;
+  const regionData = (reportsData.pipeline_by_region || []).map(r => ({
+    name: r.name === 'Europe' ? 'EMEA' : r.name === 'Asia Pacific' ? 'APAC' : r.name,
+    value: r.percent !== undefined ? r.percent : (r.value || 0),
+    fill: r.fill || regionColors[r.name] || '#6B7280'
+  }));
 
-  const activityData = [
-    { name: 'Calls', value: Math.round((callsCount / totalAct) * 100), fill: '#10B981' },
-    { name: 'Emails', value: Math.round((emailsCount / totalAct) * 100), fill: '#3B82F6' },
-    { name: 'Meetings', value: Math.round((meetingsCount / totalAct) * 100), fill: '#F59E0B' },
-    { name: 'Demos', value: Math.round((demosCount / totalAct) * 100), fill: '#8B5CF6' },
-  ];
+  const activityColors = {
+    'Calls': '#10B981',
+    'Emails': '#3B82F6',
+    'Meetings': '#F59E0B',
+    'Demos': '#8B5CF6',
+    'Other': '#6B7280'
+  };
 
-  const repNames = [
-    { label: 'D. Ghosh', search: 'Debabrata Ghosh' },
-    { label: 'S. Mishra', search: 'Sanjay Mishra' },
-    { label: 'H. Kumar', search: 'Hemant Kumar' },
-    { label: 'P. Sharma', search: 'Prashant Sharma' },
-    { label: 'R. Nair', search: 'Rajesh Nair' }
-  ];
+  const activityData = (reportsData.activity_breakdown || []).map(act => ({
+    name: act.name,
+    value: act.percent !== undefined ? act.percent : (act.value || 0),
+    count: act.count,
+    fill: act.fill || activityColors[act.name] || '#10B981'
+  }));
 
-  const repPerformanceData = repNames.map(rep => {
-    const leadsForRep = initialLeadsData.filter(l => l.owner === rep.search || l.owner === rep.label);
-    const won = leadsForRep
-      .filter(l => l.status === 'Won')
-      .reduce((sum, l) => sum + (parseInt(l.value.replace(/[^0-9]/g, ''), 10) || 0), 0);
-    const lost = leadsForRep
-      .filter(l => l.status === 'Lost')
-      .reduce((sum, l) => sum + (parseInt(l.value.replace(/[^0-9]/g, ''), 10) || 0), 0);
-    const pipeline = leadsForRep
-      .filter(l => l.status !== 'Won' && l.status !== 'Lost')
-      .reduce((sum, l) => sum + (parseInt(l.value.replace(/[^0-9]/g, ''), 10) || 0), 0);
-    
-    return { name: rep.label, won, lost, pipeline };
-  });
+  const repPerformanceData = (reportsData.rep_performance || []).map(rep => ({
+    name: rep.name,
+    won: rep.won || 0,
+    lost: rep.lost || 0,
+    pipeline: rep.pipeline || 0,
+    total_deals: rep.total_deals
+  }));
 
-  const priorityList = [
-    { tier: 'Urgent', label: 'Critical', color: 'badge-danger' },
-    { tier: 'High', label: 'High', color: 'badge-warning' },
-    { tier: 'Normal', label: 'Medium', color: 'badge-info' },
-    { tier: 'Low', label: 'Low', color: 'badge-success' }
-  ];
+  const priorityColors = {
+    'Critical': 'badge-danger',
+    'Urgent': 'badge-danger',
+    'High': 'badge-warning',
+    'Medium': 'badge-info',
+    'Normal': 'badge-info',
+    'Low': 'badge-success'
+  };
 
-  const priorityLeads = priorityList.map(item => {
-    const matching = initialLeadsData.filter(l => l.priority === item.tier || (item.tier === 'Normal' && l.priority === 'Medium'));
-    const count = matching.length;
-    const valueSum = matching.reduce((sum, l) => sum + (parseInt(l.value.replace(/[^0-9]/g, ''), 10) || 0), 0);
+  const priorityLeads = (reportsData.priority_breakdown || []).map(item => {
+    const tierName = item.tier || (item.priority === 'Urgent' ? 'Critical' : item.priority === 'Normal' ? 'Medium' : item.priority || 'Normal');
+    const valFormatted = typeof item.value === 'number' 
+      ? `$${item.value.toLocaleString()}` 
+      : (item.value || (item.numeric_value ? `$${item.numeric_value.toLocaleString()}` : '$0'));
+
     return {
-      tier: item.label,
-      count,
-      value: `$${valueSum.toLocaleString()}`,
-      color: item.color
+      tier: tierName,
+      count: item.count || 0,
+      value: valFormatted,
+      color: item.color || priorityColors[tierName] || 'badge-info',
+      actionStatus: item.action_status || (tierName === 'Critical' ? 'Requires Daily Review' : tierName === 'High' ? 'Weekly Follow-up' : 'Standard Cycle')
     };
   });
+
+  const revenueMomentumText = reportsData.revenue_summary?.revenue_momentum_text || 
+    (reportsData.revenue_summary?.growth_percent !== undefined ? `${reportsData.revenue_summary.growth_percent >= 0 ? '+' : ''}${reportsData.revenue_summary.growth_percent}% MoM` : '+0.0% MoM');
+  
+  const currentRevenue = reportsData.revenue_summary?.total_revenue || reportsData.revenue_summary?.current_period_revenue || 0;
+  const winRate = reportsData.conversion_analytics?.win_rate_percent || 0;
+  const avgCycle = reportsData.conversion_analytics?.avg_sales_cycle_days || 0;
 
   const formatCurrency = (val) => `$${(val / 1000)}k`;
 
   return (
     <div className="reports-container">
-      <h1 className="page-title">Reports &amp; Analytics</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+        <h1 className="page-title" style={{ margin: 0 }}>Reports &amp; Analytics</h1>
+        {isBackgroundUpdating ? (
+          <span className="ai-pulse-indicator">
+            <RefreshCw size={13} style={{ animation: 'rotateSparkle 1.5s infinite linear' }} />
+            Updating live data...
+          </span>
+        ) : loading ? (
+          <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Loading analytics...</span>
+        ) : null}
+      </div>
+
+      {error && (
+        <div style={{ margin: '16px 0', padding: '12px 16px', backgroundColor: '#FEF2F2', border: '1px solid #F87171', borderRadius: '8px', color: '#991B1B', fontSize: '13px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>{error}</span>
+          <button onClick={handleRefreshAi} style={{ background: 'none', border: 'none', color: '#DC2626', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>Retry</button>
+        </div>
+      )}
+
+      {loading && !cachedData ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', marginTop: '16px' }}>
+          <div className="reports-skeleton-card" style={{ height: '140px' }}>
+            <div className="skeleton-shimmer" style={{ width: '40%', height: '24px' }}></div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', flex: 1 }}>
+              <div className="skeleton-shimmer" style={{ height: '100%' }}></div>
+              <div className="skeleton-shimmer" style={{ height: '100%' }}></div>
+              <div className="skeleton-shimmer" style={{ height: '100%' }}></div>
+            </div>
+          </div>
+          <div className="charts-grid">
+            <div className="reports-skeleton-card">
+              <div className="skeleton-shimmer" style={{ width: '35%', height: '20px' }}></div>
+              <div className="skeleton-shimmer" style={{ flex: 1 }}></div>
+            </div>
+            <div className="reports-skeleton-card">
+              <div className="skeleton-shimmer" style={{ width: '35%', height: '20px' }}></div>
+              <div className="skeleton-shimmer" style={{ flex: 1 }}></div>
+            </div>
+            <div className="reports-skeleton-card">
+              <div className="skeleton-shimmer" style={{ width: '35%', height: '20px' }}></div>
+              <div className="skeleton-shimmer" style={{ flex: 1 }}></div>
+            </div>
+            <div className="reports-skeleton-card">
+              <div className="skeleton-shimmer" style={{ width: '35%', height: '20px' }}></div>
+              <div className="skeleton-shimmer" style={{ flex: 1 }}></div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
 
       {/* AI Summary Card for Reports */}
-      <div className="card ai-summary-premium-card">
+      <div className="card ai-summary-premium-card" style={{ marginTop: '16px' }}>
         <div className="ai-card-glow"></div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -167,18 +301,18 @@ export default function Reports() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', paddingTop: '16px' }}>
               <div className="ai-premium-stat-box">
                 <div className="ai-premium-stat-title">Revenue Momentum</div>
-                <div className="ai-premium-stat-value" style={{ color: '#34D399' }}>+18.4% MoM</div>
-                <div className="ai-premium-stat-desc">$1,075,000 Total Value</div>
+                <div className="ai-premium-stat-value" style={{ color: '#34D399' }}>{revenueMomentumText}</div>
+                <div className="ai-premium-stat-desc">${currentRevenue.toLocaleString()} Total Value</div>
               </div>
               <div className="ai-premium-stat-box">
                 <div className="ai-premium-stat-title">Conversion Analytics</div>
-                <div className="ai-premium-stat-value" style={{ color: '#93C5FD' }}>22.4% Win Rate</div>
-                <div className="ai-premium-stat-desc">Average cycle: 14.5 days</div>
+                <div className="ai-premium-stat-value" style={{ color: '#93C5FD' }}>{winRate}% Win Rate</div>
+                <div className="ai-premium-stat-desc">Average cycle: {avgCycle} days</div>
               </div>
               <div className="ai-premium-recommendation-box">
                 <div className="ai-premium-recommendation-title">Strategic Close Recommendation</div>
                 <div className="ai-premium-recommendation-text">
-                  📈 **Channel Velocity:** The Inbound / Self-Serve channel has a 34% shorter cycle length than Enterprise. Shifting 15% of outbound marketing to self-serve landing pages is projected to yield an additional $85k in revenue by Q3.
+                  📈 **Channel Velocity:** Real-time analytics indicates highest revenue velocity across qualified proposals. Ensure high-tier opportunities receive dedicated executive review.
                 </div>
               </div>
             </div>
@@ -286,7 +420,7 @@ export default function Reports() {
                   cy="50%"
                   outerRadius={80}
                   dataKey="value"
-                  label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}
+                  label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
                   labelLine={false}
                 >
                   {activityData.map((entry, index) => (
@@ -341,6 +475,8 @@ export default function Reports() {
           </table>
         </div>
       </div>
-    </div>
+    </>
+  )}
+</div>
   );
 }

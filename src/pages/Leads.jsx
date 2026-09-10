@@ -476,6 +476,7 @@ export default function Leads() {
         
         {(isCreatingLead || selectedLead) ? (
           <LeadProfile 
+            key={selectedLead?.id || 'new'}
             lead={selectedLead}
             isEditing={isEditing}
             usersList={usersList}
@@ -492,13 +493,14 @@ export default function Leads() {
                 company: updatedData.company || undefined,
                 projectName: updatedData.projectName || undefined,
                 designation: updatedData.designation || undefined,
-                productService: updatedData.productService || undefined,
+                requestDetails: updatedData.requestDetails || undefined,
                 requestType: updatedData.requestType || undefined,
                 contact: updatedData.contact || undefined,
                 email: updatedData.email || undefined,
                 phone: updatedData.phone || undefined,
                 officePhone: updatedData.officePhone || undefined,
                 officePhoneCountry: updatedData.officePhoneCountry || undefined,
+                countryCode: updatedData.countryCode || undefined,
                 owner: updatedData.owner || undefined,
                 industry: updatedData.industry || undefined,
                 size: updatedData.size || undefined,
@@ -521,7 +523,7 @@ export default function Leads() {
                 estimatedRequirementDate: updatedData.estimatedRequirementDate || undefined,
                 lastContactDate: updatedData.lastContactDate || undefined,
                 nextFollowUp: updatedData.nextFollowUp || undefined,
-                basicRequirements: updatedData.basicRequirements || undefined,
+                basicRequirements: updatedData.requestDetails || updatedData.basicRequirements || undefined,
                 notes: updatedData.notes || undefined,
               };
               // Remove undefined keys
@@ -547,7 +549,7 @@ export default function Leads() {
                 try {
                   const refreshed = await fetchLeads({ page: currentPage, limit: 50 });
                   if (refreshed?.data) setLeads(refreshed.data);
-                } catch (_) { /* non-critical */ }
+                } catch { /* non-critical */ }
               } catch (err) {
                 console.error('Failed to save lead:', err);
                 alert(err.message || 'Failed to save lead.');

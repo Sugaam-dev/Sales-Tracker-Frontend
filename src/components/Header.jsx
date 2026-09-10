@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, Plus, Bell, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import QuickCreateLeadModal from './QuickCreateLeadModal';
@@ -60,9 +60,8 @@ export default function Header() {
     : [];
 
   const handleCreateLead = async (data) => {
-    setIsModalOpen(false);
     try {
-      const cleanPhone = String(data.phone).replace(/[^0-9]/g, '').slice(0, 10);
+      const cleanPhone = String(data.phone).replace(/\D/g, '');
       let statusPayload = 'Open';
       const lowercaseStatus = String(data.status).toLowerCase();
       if (['open', 'new', 'contacted', 'interested', 'negotiation'].includes(lowercaseStatus)) {
@@ -75,24 +74,34 @@ export default function Header() {
         statusPayload = 'Lost';
       }
 
+      // Extract calling code e.g. "+91" from "IN +91"
+      let callingCode = '+91';
+      if (data.countryCode) {
+        const match = data.countryCode.match(/\+\d+/);
+        callingCode = match ? match[0] : data.countryCode;
+      }
+
       const payload = {
         company: data.companyName,
         contact: data.leadName,
         email: data.email,
         phone: cleanPhone,
         officePhone: cleanPhone,
+        countryCode: callingCode,
         owner: data.owner,
         stage: 'Qualification',
         status: statusPayload,
         sentiment: 'Neutral',
-        priority: data.priority === 'Medium' ? 'Normal' : data.priority,
+        priority: data.priority,
         kamName: data.leadName,
-        productService: data.productService || '',
-        requestType: data.requestType || '',
-        basicRequirements: data.productService ? `${data.requestType}: ${data.productService}` : 'Quick created lead',
+        requestType: data.requestType,
+        requestDetails: data.requestDetails,
+        basicRequirements: data.requestDetails,
         estimatedRequirementDate: data.estDate || '',
       };
+
       await createLead(payload);
+      setIsModalOpen(false);
       setToastMessage('Lead created - Added to pipeline');
       
       setTimeout(() => {
@@ -104,9 +113,8 @@ export default function Header() {
       }, 1500);
     } catch (err) {
       console.error('Quick Create Error:', err);
-      // Extract exact validation error from backend response if available
-      const fullError = err.response?.data ? JSON.stringify(err.response.data) : err.message;
-      alert(`Failed to quick create lead: ${fullError}`);
+      // Re-throw so QuickCreateLeadModal catches it and displays exact backend message
+      throw err;
     }
   };
 
