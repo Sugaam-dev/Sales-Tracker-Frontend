@@ -109,9 +109,46 @@ function normalizeCountryCode(val, fallback = 'IN|+91') {
   return found ? `${found.iso}|${found.code}` : fallback;
 }
 
+/**
+ * Returns maximum allowed phone number digits based on selected country code.
+ */
+function getMaxPhoneDigits(countryCode) {
+  const country = String(countryCode || '').toUpperCase();
+  if (country.includes('IN') || country.includes('+91')) return 10;
+  if (country.includes('US') || country.includes('+1')) return 10;
+  if (country.includes('UK') || country.includes('GB') || country.includes('+44')) return 10;
+  if (country.includes('AE') || country.includes('+971')) return 9;
+  if (country.includes('SG') || country.includes('+65')) return 8;
+  return 15;
+}
+
+/**
+ * Whitespace-based word counter handling normal spaces, multiple spaces,
+ * leading/trailing spaces, tabs, and newlines.
+ */
+function countWords(text) {
+  if (!text || typeof text !== 'string') return 0;
+  const trimmed = text.trim();
+  if (!trimmed) return 0;
+  return trimmed.split(/\s+/).filter(Boolean).length;
+}
+
+/**
+ * Validates requestDetails according to 50-200 words business rules.
+ */
+function validateRequestDetails(value) {
+  const words = countWords(value);
+  if (words === 0) return 'Request details must contain at least 50 words.';
+  if (words < 50) return 'Request details must contain at least 50 words.';
+  if (words > 200) return 'Request details cannot exceed 200 words.';
+  return '';
+}
+
 /** A phone input combining a country-code dropdown with a number field. */
 function PhoneInput({ label, required, value, onChange, countryCode, onCountryCodeChange, error }) {
   const selected = COUNTRY_CODES.find(c => `${c.iso}|${c.code}` === countryCode || c.code === countryCode || c.iso === countryCode) || COUNTRY_CODES.find(c => c.code === '+91') || COUNTRY_CODES[2];
+  const maxDigits = getMaxPhoneDigits(countryCode);
+
   return (
     <div className="form-group">
       <label>
@@ -137,7 +174,10 @@ function PhoneInput({ label, required, value, onChange, countryCode, onCountryCo
           {/* Invisible native select for interaction */}
           <select
             value={selected ? `${selected.iso}|${selected.code}` : countryCode}
-            onChange={(e) => onCountryCodeChange(e.target.value)}
+            onChange={(e) => {
+              const newCode = e.target.value;
+              onCountryCodeChange(newCode);
+            }}
             style={{
               position: 'absolute',
               inset: 0,
@@ -178,7 +218,12 @@ function PhoneInput({ label, required, value, onChange, countryCode, onCountryCo
         <input
           type="tel"
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => {
+            const digits = e.target.value.replace(/\D/g, '');
+            const max = getMaxPhoneDigits(countryCode);
+            onChange(digits.slice(0, max));
+          }}
+          maxLength={maxDigits}
           placeholder="e.g. 98765 43210"
           style={{
             flex: 1,
@@ -224,6 +269,8 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
   // Controlled fields state
   const [company, setCompany] = useState(lead?.company || '');
   const [requestDetails, setRequestDetails] = useState(lead?.requestDetails || lead?.basicRequirements || '');
+  const [requestDetailsTouched, setRequestDetailsTouched] = useState(false);
+  const [basicRequirements, setBasicRequirements] = useState(lead?.basicRequirements || '');
   const [requestType, setRequestType] = useState(getInitialRequestType(lead?.requestType));
   const [industry, setIndustry] = useState(lead?.industry || 'select');
   const [size, setSize] = useState(lead?.size || 'select');
@@ -242,6 +289,8 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
   const [lastContactDate, setLastContactDate] = useState(lead?.lastContactDate ? lead.lastContactDate.substring(0, 10) : '');
   const [nextFollowUp, setNextFollowUp] = useState(lead?.nextFollowUp ? lead.nextFollowUp.substring(0, 10) : '');
   const [notes, setNotes] = useState(lead?.notes || '');
+
+  const currentWordCount = countWords(requestDetails);
 
   // Office phone and Best Time state
   const [officePhone, setOfficePhone] = useState(lead?.officePhone || lead?.phone || '');
@@ -346,8 +395,11 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
 
   // ── Handlers ──────────────────────────────────────────────────────
   const handlePhoneChange = (val) => {
-    setPhone(val);
-    if (phoneTouched) setPhoneError(validatePhone(val, phoneCountry).message);
+    const digits = (val || '').replace(/\D/g, '');
+    const max = getMaxPhoneDigits(phoneCountry);
+    const sanitized = digits.slice(0, max);
+    setPhone(sanitized);
+    if (phoneTouched) setPhoneError(validatePhone(sanitized, phoneCountry).message);
   };
   const handlePhoneBlur = () => {
     setPhoneTouched(true);
@@ -355,9 +407,12 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
   };
 
   const handleAltPhoneChange = (val) => {
-    setAltPhone(val);
+    const digits = (val || '').replace(/\D/g, '');
+    const max = getMaxPhoneDigits(altPhoneCountry);
+    const sanitized = digits.slice(0, max);
+    setAltPhone(sanitized);
     if (altPhoneTouched) {
-      setAltPhoneError(val ? validatePhone(val, altPhoneCountry).message : '');
+      setAltPhoneError(sanitized ? validatePhone(sanitized, altPhoneCountry).message : '');
     }
   };
   const handleAltPhoneBlur = () => {
@@ -366,9 +421,12 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
   };
 
   const handleOfficePhoneChange = (val) => {
-    setOfficePhone(val);
+    const digits = (val || '').replace(/\D/g, '');
+    const max = getMaxPhoneDigits(officePhoneCountry);
+    const sanitized = digits.slice(0, max);
+    setOfficePhone(sanitized);
     if (officePhoneTouched) {
-      const msg = validatePhone(val, officePhoneCountry).message;
+      const msg = validatePhone(sanitized, officePhoneCountry).message;
       setOfficePhoneError(msg ? msg.replace('Phone number', 'Office Phone Number') : '');
     }
   };
@@ -386,6 +444,18 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
   const handleEmailBlur = () => {
     setEmailTouched(true);
     setEmailError(validateEmail(email).message);
+  };
+
+  const handleRequestDetailsChange = (e) => {
+    const val = e.target.value;
+    setRequestDetails(val);
+    if (requestDetailsTouched || requestDetailsError) {
+      setRequestDetailsError(validateRequestDetails(val));
+    }
+  };
+  const handleRequestDetailsBlur = () => {
+    setRequestDetailsTouched(true);
+    setRequestDetailsError(validateRequestDetails(requestDetails));
   };
 
   const handleFileChange = (e) => {
@@ -517,8 +587,10 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
     }
 
     let hasRequestDetailsError = false;
-    if (!requestDetails || !requestDetails.trim()) {
-      setRequestDetailsError('Request Details is required');
+    setRequestDetailsTouched(true);
+    const reqDetailsMsg = validateRequestDetails(requestDetails);
+    if (reqDetailsMsg) {
+      setRequestDetailsError(reqDetailsMsg);
       hasRequestDetailsError = true;
     } else {
       setRequestDetailsError('');
@@ -588,7 +660,7 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
       estimatedRequirementDate,
       lastContactDate,
       nextFollowUp,
-      basicRequirements: requestDetails,
+      basicRequirements: basicRequirements || requestDetails,
       notes,
       criteria: {
         ...lead?.criteria,
@@ -633,12 +705,31 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
                 <input type="text" value={projectName} onChange={(e) => setProjectName(e.target.value)} placeholder="e.g. Horizon Retail Omnichannel Commerce Transform" />
               </div>
               <div className="form-group">
-                <label>Request Details <span style={{ color: 'var(--color-danger)' }}>*</span></label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <label style={{ margin: 0 }}>
+                    Request Details <span style={{ color: 'var(--color-danger)' }}>*</span>
+                  </label>
+                  <span 
+                    className="word-counter"
+                    style={{ 
+                      fontSize: '11px',
+                      fontWeight: '500',
+                      color: (currentWordCount < 50 || currentWordCount > 200) ? 'var(--color-text-muted)' : '#10b981'
+                    }}
+                  >
+                    {currentWordCount} / 200 words
+                  </span>
+                </div>
                 <textarea
                   value={requestDetails}
-                  onChange={(e) => { setRequestDetails(e.target.value); setRequestDetailsError(''); }}
+                  onChange={handleRequestDetailsChange}
+                  onBlur={handleRequestDetailsBlur}
                   placeholder="Provide between 50 to 200 words describing the client request..."
-                  style={{ minHeight: '80px', resize: 'vertical' }}
+                  style={{ 
+                    minHeight: '80px', 
+                    resize: 'vertical',
+                    borderColor: requestDetailsError ? 'var(--color-danger)' : undefined
+                  }}
                   required
                 />
                 {requestDetailsError && <p style={{ margin: '4px 0 0', fontSize: '11px', color: 'var(--color-danger)' }}>{requestDetailsError}</p>}
@@ -664,8 +755,11 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
                   countryCode={officePhoneCountry}
                   onCountryCodeChange={(val) => {
                     setOfficePhoneCountry(val);
-                    if (officePhone) {
-                      const msg = validatePhone(officePhone, val).message;
+                    const max = getMaxPhoneDigits(val);
+                    const truncated = (officePhone || '').replace(/\D/g, '').slice(0, max);
+                    setOfficePhone(truncated);
+                    if (officePhoneTouched || officePhone) {
+                      const msg = validatePhone(truncated, val).message;
                       setOfficePhoneError(msg ? msg.replace('Phone number', 'Office Phone Number') : '');
                     }
                   }}
@@ -758,7 +852,15 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
                   value={phone}
                   onChange={handlePhoneChange}
                   countryCode={phoneCountry}
-                  onCountryCodeChange={setPhoneCountry}
+                  onCountryCodeChange={(val) => {
+                    setPhoneCountry(val);
+                    const max = getMaxPhoneDigits(val);
+                    const truncated = (phone || '').replace(/\D/g, '').slice(0, max);
+                    setPhone(truncated);
+                    if (phoneTouched || phone) {
+                      setPhoneError(validatePhone(truncated, val).message);
+                    }
+                  }}
                   error={phoneError}
                 />
               </div>
@@ -781,7 +883,15 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
                   value={altPhone}
                   onChange={handleAltPhoneChange}
                   countryCode={altPhoneCountry}
-                  onCountryCodeChange={setAltPhoneCountry}
+                  onCountryCodeChange={(val) => {
+                    setAltPhoneCountry(val);
+                    const max = getMaxPhoneDigits(val);
+                    const truncated = (altPhone || '').replace(/\D/g, '').slice(0, max);
+                    setAltPhone(truncated);
+                    if (altPhoneTouched || altPhone) {
+                      setAltPhoneError(truncated ? validatePhone(truncated, val).message : '');
+                    }
+                  }}
                   error={altPhoneError}
                 />
               </div>
@@ -853,8 +963,8 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
               </div>
             </div>
             <div className="form-group" style={{ marginTop: '20px' }}>
-              <label>Request Details</label>
-              <textarea placeholder="List the core requirements..." value={requestDetails} onChange={(e) => setRequestDetails(e.target.value)} style={{ minHeight: '60px' }}></textarea>
+              <label>Basic Requirements</label>
+              <textarea placeholder="List any additional basic requirements..." value={basicRequirements} onChange={(e) => setBasicRequirements(e.target.value)} style={{ minHeight: '60px' }}></textarea>
             </div>
             <div className="form-group" style={{ marginTop: '16px' }}>
               <label>Notes</label>
