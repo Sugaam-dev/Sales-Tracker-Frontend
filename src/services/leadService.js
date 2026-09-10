@@ -150,3 +150,62 @@ export async function bulkCreateLeads(leads) {
   return data;
 }
 
+export async function fetchTasks() {
+  const response = await authenticatedFetch(API.TASKS);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to fetch tasks.');
+  }
+  return data;
+}
+
+export async function createTask(payload) {
+  const response = await authenticatedFetch(API.TASKS, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to create task.');
+  }
+  return data;
+}
+
+export async function updateTaskStatus(id, completed) {
+  const response = await authenticatedFetch(`${API.TASKS}/${id}/status`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ completed }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to update task status.');
+  }
+  return data;
+}
+
+export async function deleteTask(id) {
+  const response = await authenticatedFetch(`${API.TASKS}/${id}`, {
+    method: 'DELETE',
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to delete task.');
+  }
+  return data;
+}
+
+export async function fetchHeatMapReport() {
+  const response = await authenticatedFetch(API.HEAT_MAP);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to fetch heat-map report.');
+  }
+  return data;
+}
+

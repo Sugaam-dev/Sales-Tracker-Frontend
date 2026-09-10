@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DollarSign, Percent, AlertCircle, CheckCircle2, Clock, X, Sparkles, RefreshCw, Trash2, Edit2, PlusCircle, ChevronUp, ChevronDown } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import KpiCard from '../components/KpiCard';
 import { initialLeadsData } from './mockLeads';
+import { fetchTasks, createTask, updateTaskStatus, deleteTask } from '../services/leadService';
 import './Dashboard.css';
 
 export default function Dashboard() {
@@ -23,7 +24,8 @@ export default function Dashboard() {
   const [aiInsights, setAiInsights] = useState([
     { icon: '🚀', text: 'Pipeline value increased by 14% this week due to Stark Industries deal sizing.', type: 'trend', badge: 'Revenue Up' },
     { icon: '🔥', text: 'Quantum Tech is ready for closing; schedule the Negotiation review today.', type: 'action', badge: 'Hot Deal' },
-    { icon: '⚠️', text: 'NovaMed Healthcare follow-up call is overdue by 2 days.', type: 'alert', badge: 'Overdue' }
+    { icon: '🔥', text: 'Zenith Financial has proposal active; high conversion likelihood predicted (75%).', type: 'action', badge: 'Action Recommended' },
+    { icon: '⚠️', text: 'Action required: 4 follow-up activities are pending for this week.', type: 'alert', badge: 'Tasks Pending' }
   ]);
 
   const handleRefreshAi = () => {
@@ -38,44 +40,114 @@ export default function Dashboard() {
     }, 1500);
   };
 
-  // Sticky Note To-Do list state
-  const [tasks, setTasks] = useState([
-    { id: 1, text: 'Follow-up Call with Horizon Retail', date: 'Tomorrow', priority: 'High', completed: false },
-    { id: 2, text: 'Email introductory deck to Zenith Financial', date: 'Tomorrow', priority: 'Normal', completed: false },
-    { id: 3, text: 'Schedule Demo session with NovaMed Healthcare', date: 'Jul 05', priority: 'High', completed: true },
-    { id: 4, text: 'Draft Enterprise contract for Quantum Tech', date: 'Jul 07', priority: 'Urgent', completed: false }
-  ]);
-
+  // Task To-Do list state
+  const [tasks, setTasks] = useState([]);
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [taskText, setTaskText] = useState('');
   const [taskDate, setTaskDate] = useState('');
   const [taskPriority, setTaskPriority] = useState('Normal');
   const [editingTaskId, setEditingTaskId] = useState(null);
 
-  const handleToggleTask = (id) => {
-    setTasks(prev => prev.map(t => t.id === id ? { ...t, completed: !t.completed } : t));
+  useEffect(() => {
+    loadBackendTasks();
+  }, []);
+
+  const loadBackendTasks = async () => {
+    try {
+      const res = await fetchTasks();
+      if (res && res.data) {
+        const mapped = res.data.map(t => ({
+          id: t.id,
+          text: t.text,
+          date: t.dueDate || 'No Date',
+          priority: t.priority === 'High' ? 'Urgent' : t.priority === 'Medium' ? 'Normal' : t.priority,
+          completed: t.completed
+        }));
+        setTasks(mapped);
+      }
+    } catch (err) {
+      console.error('Failed to load tasks from backend:', err);
+    }
   };
 
-  const handleDeleteTask = (id) => {
+  const handleToggleTask = async (id) => {
+    const target = tasks.find(t => t.id === id);
+    if (!target) return;
+    const newStatus = !target.completed;
+    setTasks(prev => prev.map(t => t.id === id ? { ...t, completed: newStatus } : t));
+
+    try {
+      await updateTaskStatus(id, newStatus);
+    } catch (err) {
+      console.error('Failed to update task status:', err);
+      // revert on error
+      setTasks(prev => prev.map(t => t.id === id ? { ...t, completed: !newStatus } : t));
+    }
+  };
+
+  const handleDeleteTask = async (id) => {
+    const prevTasks = [...tasks];
     setTasks(prev => prev.filter(t => t.id !== id));
+
+    try {
+      await deleteTask(id);
+    } catch (err) {
+      console.error('Failed to delete task:', err);
+      setTasks(prevTasks);
+    }
   };
 
-  const handleAddTask = (e) => {
+  const parseFlexibleDate = (input) => {
+    if (!input) return undefined;
+    const str = input.trim().toLowerCase();
+    const today = new Date();
+    if (str === 'tomorrow') {
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      return tomorrow.toISOString().split('T')[0];
+    }
+    if (str === 'today') {
+      return today.toISOString().split('T')[0];
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(input.trim())) {
+      return input.trim();
+    }
+    const parsed = new Date(input);
+    if (!isNaN(parsed.getTime())) {
+      return parsed.toISOString().split('T')[0];
+    }
+    return undefined;
+  };
+
+  const handleAddTask = async (e) => {
     e.preventDefault();
     if (!taskText.trim()) return;
 
-    if (editingTaskId) {
-      setTasks(prev => prev.map(t => t.id === editingTaskId ? { ...t, text: taskText, date: taskDate || 'No Date', priority: taskPriority } : t));
-      setEditingTaskId(null);
-    } else {
-      const newTask = {
-        id: Date.now(),
-        text: taskText,
-        date: taskDate || 'No Date',
-        priority: taskPriority,
-        completed: false
-      };
-      setTasks(prev => [...prev, newTask]);
+    let mappedPriority = 'Medium';
+    if (taskPriority === 'Urgent' || taskPriority === 'High') mappedPriority = 'High';
+    else if (taskPriority === 'Low') mappedPriority = 'Low';
+
+    const payload = {
+      text: taskText.trim(),
+      dueDate: parseFlexibleDate(taskDate),
+      priority: mappedPriority
+    };
+
+    try {
+      const res = await createTask(payload);
+      if (res && res.data) {
+        const newTask = {
+          id: res.data.id,
+          text: res.data.text,
+          date: res.data.dueDate || 'No Date',
+          priority: res.data.priority === 'High' ? 'Urgent' : res.data.priority === 'Medium' ? 'Normal' : res.data.priority,
+          completed: res.data.completed
+        };
+        setTasks(prev => [newTask, ...prev]);
+      }
+    } catch (err) {
+      console.error('Failed to create task:', err);
+      alert('Failed to create task: ' + err.message);
     }
 
     setTaskText('');
@@ -87,7 +159,7 @@ export default function Dashboard() {
   const handleStartEdit = (task) => {
     setEditingTaskId(task.id);
     setTaskText(task.text);
-    setTaskDate(task.date);
+    setTaskDate(task.date !== 'No Date' ? task.date : '');
     setTaskPriority(task.priority);
     setIsAddingTask(true);
   };

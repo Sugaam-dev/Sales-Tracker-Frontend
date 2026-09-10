@@ -21,6 +21,8 @@ export const API = {
   SEND_EMAIL: `${BASE_URL}/email/send`,
   CURRENT_USERS: `${BASE_URL}/current_users/`,
   LEADS: `${BASE_URL}/leads`,
+  TASKS: `${BASE_URL}/tasks`,
+  HEAT_MAP: `${BASE_URL}/reports/heat-map`,
 };
 
 export const authHeaders = () => {
