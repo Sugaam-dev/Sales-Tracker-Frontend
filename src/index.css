@@ -160,7 +160,7 @@ button {
 .badge-danger { background: var(--color-danger-bg); color: var(--color-danger); }
 .badge-info { background: var(--color-info-bg); color: var(--color-info); }
 
-input, select {
+input:not([type="checkbox"]):not([type="radio"]), select {
   font-family: inherit;
   width: 100%;
   padding: 10px 12px;
@@ -171,7 +171,13 @@ input, select {
   outline: none;
 }
 
-input:focus, select:focus {
+input[type="checkbox"], input[type="radio"] {
+  width: auto;
+  padding: 0;
+  cursor: pointer;
+}
+
+input:not([type="checkbox"]):not([type="radio"]):focus, select:focus {
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.1);
 }

@@ -1,21 +1,41 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Settings, Mail, Edit2, Plus, Check, X, Trash2, Eye, EyeOff } from 'lucide-react';
+import { Users, Mail, Edit2, Plus, Check, X, Trash2, Eye, EyeOff, Shield } from 'lucide-react';
 import { API, authHeaders } from '../api/config';
-import { createUser } from '../services/authService';
+import {
+  createUser,
+  fetchUsers,
+  updateUser,
+  grantLeaderDelegation,
+  revokeLeaderDelegation,
+  hasPermission,
+} from '../services/authService';
+import { useToast, useConfirm } from '../context/FeedbackContext';
 import './Admin.css';
 
 // ─── Reusable UI Components ──────────────────────────────────────────────────
 
-const ModalWrapper = ({ title, onClose, children }) => (
-  <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15,23,42,0.5)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-    <div style={{ backgroundColor: 'var(--color-surface)', padding: '24px', borderRadius: 'var(--radius-lg)', width: '400px', boxShadow: 'var(--shadow-lg)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', alignItems: 'center' }}>
-        <h3 style={{ fontSize: '18px', fontWeight: 'bold', margin: 0 }}>{title}</h3>
-        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit' }}>
+const ModalWrapper = ({ title, onClose, children, maxWidth = '440px', bodyClassName = '' }) => (
+  <div
+    className="admin-modal-overlay"
+    onClick={(e) => {
+      if (e.target === e.currentTarget) onClose();
+    }}
+  >
+    <div className="admin-modal-card" style={{ maxWidth }}>
+      <div className="admin-modal-header">
+        <h3 className="admin-modal-title">{title}</h3>
+        <button
+          type="button"
+          className="admin-modal-close-btn"
+          onClick={onClose}
+          aria-label="Close modal"
+        >
           <X size={20} />
         </button>
       </div>
-      {children}
+      <div className={`admin-modal-body hide-scrollbar ${bodyClassName}`}>
+        {children}
+      </div>
     </div>
   </div>
 );
@@ -30,183 +50,38 @@ const FormInput = ({ label, name, type = "text", defaultValue, required, min, ma
   </div>
 );
 
-// ─── Master Data Section Component ───────────────────────────────────────────
-
-function MasterDataSection({ title, items, onDelete, onAdd, onEdit, renderItem }) {
-  return (
-    <div style={{ marginBottom: '24px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
-      <div style={{ padding: '12px 16px', background: 'var(--color-background)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--color-border)' }}>
-        <h4 style={{ margin: 0, fontSize: '15px', fontWeight: '600' }}>{title}</h4>
-        <button className="btn-primary" onClick={onAdd} style={{ fontSize: '12px', padding: '4px 10px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <Plus size={12} /> Add
-        </button>
-      </div>
-      <div style={{ padding: '8px' }}>
-        {items.map(item => (
-          <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderRadius: 'var(--radius-md)', marginBottom: '4px', background: item.is_active ? 'transparent' : 'rgba(239,68,68,0.05)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: item.is_active ? '#10B981' : '#EF4444', display: 'inline-block', flexShrink: 0 }}></span>
-              {renderItem(item)}
-            </div>
-            <div style={{ display: 'flex', gap: '6px' }}>
-              <button className="icon-btn edit" onClick={() => onEdit(item)} title="Edit"><Edit2 size={13} /></button>
-              <button className="icon-btn delete" onClick={() => onDelete(item.id)} title="Deactivate"><Trash2 size={13} /></button>
-            </div>
-          </div>
-        ))}
-        {items.length === 0 && <p style={{ padding: '12px', color: 'var(--color-text-muted)', fontSize: '13px', textAlign: 'center' }}>No items yet — click Add!</p>}
-      </div>
-    </div>
-  );
-}
-
-// ─── Master Data Settings Tab ─────────────────────────────────────────────────
-
-function MasterDataSettings() {
-  const [stages, setStages] = useState([]);
-  const [priorities, setPriorities] = useState([]);
-  const [sources, setSources] = useState([]);
-  const [regions, setRegions] = useState([]);
-  const [activityTypes, setActivityTypes] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [modal, setModal] = useState(null);
-
-  useEffect(() => { fetchAll(); }, []);
-
-  const fetchAll = async () => {
-    setLoading(true);
-    try {
-      const endpoints = [API.MASTER_STAGES, API.MASTER_PRIORITIES, API.MASTER_SOURCES, API.MASTER_REGIONS, API.MASTER_ACTIVITY_TYPES];
-      const [s, p, src, r, a] = await Promise.all(
-        endpoints.map(url => fetch(url, { headers: authHeaders() }).then(res => res.json()))
-      );
-      setStages(s); setPriorities(p); setSources(src); setRegions(r); setActivityTypes(a);
-    } catch (err) {
-      console.error('Failed to load master data');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const API_MAP = {
-    stage: API.MASTER_STAGES,
-    priority: API.MASTER_PRIORITIES,
-    source: API.MASTER_SOURCES,
-    region: API.MASTER_REGIONS,
-    activityType: API.MASTER_ACTIVITY_TYPES,
-  };
-
-  const handleSave = async (e) => {
-    e.preventDefault();
-    const form = e.target.elements;
-    const { type, mode, item } = modal;
-
-    const payload = { name: form.name.value };
-    if (type === 'stage') {
-      payload.order_index = parseInt(form.order_index?.value || 0);
-      payload.default_probability = parseFloat(form.default_probability?.value || 0);
-    } else if (type === 'priority' || type === 'source') {
-      payload.score = parseInt(form.score?.value || 0);
-    }
-
-    const url = mode === 'edit' ? `${API_MAP[type]}/${item.id}` : API_MAP[type];
-    try {
-      const res = await fetch(url, { method: mode === 'edit' ? 'PUT' : 'POST', headers: authHeaders(), body: JSON.stringify(payload) });
-      if (res.ok) { fetchAll(); setModal(null); }
-    } catch (err) {
-      alert('Failed to save');
-    }
-  };
-
-  const handleDelete = async (type, id) => {
-    if (!window.confirm('Deactivate this item?')) return;
-    try {
-      await fetch(`${API_MAP[type]}/${id}`, { method: 'DELETE', headers: authHeaders() });
-      fetchAll();
-    } catch (err) {
-      alert('Failed to deactivate');
-    }
-  };
-
-  if (loading) return <p style={{ padding: '16px', color: 'var(--color-text-muted)' }}>Loading master data...</p>;
-
-  const masterDataConfigs = [
-    { type: 'stage', title: '📋 Lead Stages', items: stages, detail: (item) => `Prob: ${item.default_probability}% | Order: ${item.order_index}` },
-    { type: 'priority', title: '🎯 Priorities', items: priorities, detail: (item) => `Score: ${item.score}` },
-    { type: 'source', title: '📡 Lead Sources', items: sources, detail: (item) => `Score: ${item.score}` },
-    { type: 'region', title: '🌍 Regions', items: regions },
-    { type: 'activityType', title: '⚡ Activity Types', items: activityTypes },
-  ];
-
-  return (
-    <div>
-      {/* <div className="pane-header" style={{ marginBottom: '16px' }}> */}
-        {/* <h3>Dropdown Settings</h3> */}
-        {/* <p style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>Manage dropdown values used across the app</p> */}
-      {/* </div> */}
-
-      {/* {masterDataConfigs.map(({ type, title, items, detail }) => (
-        <MasterDataSection
-          key={type}
-          title={title}
-          items={items}
-          onAdd={() => setModal({ type, mode: 'add', item: {} })}
-          onEdit={(item) => setModal({ type, mode: 'edit', item })}
-          onDelete={(id) => handleDelete(type, id)}
-          renderItem={(item) => (
-            <div>
-              <span style={{ fontWeight: '500', fontSize: '14px' }}>{item.name}</span>
-              {detail && <span style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginLeft: '8px' }}>{detail(item)}</span>}
-            </div>
-          )}
-        />
-      ))} */}
-
-      {modal && (
-        <ModalWrapper title={`${modal.mode === 'add' ? 'Add' : 'Edit'} ${modal.type}`} onClose={() => setModal(null)}>
-          <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            <FormInput label="Name" name="name" defaultValue={modal.item?.name || ''} required />
-            
-            {modal.type === 'stage' && (
-              <>
-                <FormInput label="Default Probability (%)" name="default_probability" type="number" min="0" max="100" defaultValue={modal.item?.default_probability || 0} />
-                <FormInput label="Order Index" name="order_index" type="number" min="0" defaultValue={modal.item?.order_index || 0} />
-              </>
-            )}
-            
-            {['priority', 'source'].includes(modal.type) && (
-              <FormInput label="Score" name="score" type="number" min="0" defaultValue={modal.item?.score || 0} />
-            )}
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '8px' }}>
-              <button type="button" className="btn-secondary" onClick={() => setModal(null)}>Cancel</button>
-              <button type="submit" className="btn-primary">Save</button>
-            </div>
-          </form>
-        </ModalWrapper>
-      )}
-    </div>
-  );
-}
-
 // ─── Main Admin Component ─────────────────────────────────────────────────────
 
 export default function Admin({ user: propUser }) {
+  const showToast = useToast();
+  const confirm = useConfirm();
   const currentUser = propUser || JSON.parse(localStorage.getItem('user'));
-  const isAdmin = currentUser?.role?.toLowerCase() === 'admin';
+  const userRole = (currentUser?.rawRole || currentUser?.role || '').toLowerCase();
+  const isAdmin = userRole === 'admin';
 
-  const [activeTab, setActiveTab] = useState('users');
-  const [toastMessage, setToastMessage] = useState('');
+  const canViewUsers = hasPermission(currentUser, 'user.view');
+  const canCreateUser = hasPermission(currentUser, 'user.create');
+  const canUpdateUser = hasPermission(currentUser, 'user.update');
+  const canDeleteUser = hasPermission(currentUser, 'user.delete');
+  const canManageManagers = hasPermission(currentUser, 'manager.manage');
+
+  const tabs = [];
+  if (canViewUsers) {
+    tabs.push({ id: 'users', label: 'User Management', Icon: Users });
+  }
+  if (isAdmin) {
+    tabs.push({ id: 'email', label: 'Email Automation', Icon: Mail });
+  }
+
+  const [activeTab, setActiveTab] = useState(tabs[0]?.id || 'users');
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
+  const [modalRole, setModalRole] = useState('sales_executive');
   const [editingUser, setEditingUser] = useState(null);
+  const [delegationModalLeader, setDelegationModalLeader] = useState(null);
+  const [delegationLoading, setDelegationLoading] = useState(false);
 
-  const [users, setUsers] = useState([
-    { id: 1, name: 'Debabrata Ghosh', email: 'debabrata@salestracker.com', role: 'Sales Executive', active: true  },
-    { id: 2, name: 'Sanjay Mishra',   email: 'sanjay@salestracker.com',   role: 'Sales Manager',   active: true  },
-    { id: 3, name: 'Hemant Kumar',    email: 'hemant@salestracker.com',   role: 'Leader', active: true },
-    { id: 4, name: 'Priya Sharma',    email: 'priya@salestracker.com',    role: 'Sales Executive', active: false },
-    { id: 5, name: 'Rahul Desai',     email: 'rahul@salestracker.com',    role: 'Leader', active: true  },
-  ]);
+  const [users, setUsers] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
 
   const [sendingState, setSendingState] = useState('idle');
   const [emailRecipient, setEmailRecipient] = useState('');
@@ -218,14 +93,83 @@ export default function Admin({ user: propUser }) {
   const [userCreationSuccess, setUserCreationSuccess] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  const showToast = (message) => {
-    setToastMessage(message);
-    setTimeout(() => setToastMessage(''), 3000);
+  const loadUsers = async () => {
+    if (!canViewUsers) return;
+    setLoadingUsers(true);
+    try {
+      const data = await fetchUsers();
+      setUsers(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Failed to load users:', err);
+      showToast(err.message || 'Failed to load users');
+    } finally {
+      setLoadingUsers(false);
+    }
   };
 
-  const toggleUser = (id) => {
-    setUsers(users.map(u => u.id === id ? { ...u, active: !u.active } : u));
-    showToast('User status updated');
+  useEffect(() => {
+    if (!canViewUsers) return;
+    let isMounted = true;
+    fetchUsers()
+      .then((data) => {
+        if (isMounted) setUsers(Array.isArray(data) ? data : []);
+      })
+      .catch((err) => {
+        if (isMounted) {
+          console.error('Failed to load users:', err);
+          showToast(err.message || 'Failed to load users');
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [canViewUsers]);
+
+  const toggleUser = async (user) => {
+    if (!canDeleteUser) return;
+    const newStatus = user.is_active === false ? true : false;
+    const actionLabel = newStatus ? 'activate' : 'deactivate';
+
+    const confirmed = await confirm({
+      title: `${newStatus ? 'Activate' : 'Deactivate'} User?`,
+      message: `Are you sure you want to ${actionLabel} ${user.name || user.email}?`,
+      confirmText: newStatus ? 'Activate' : 'Deactivate',
+      cancelText: 'Cancel',
+      variant: newStatus ? 'primary' : 'danger',
+    });
+    if (!confirmed) return;
+
+    try {
+      await updateUser(user.id, {
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        is_active: newStatus,
+        manager_id: user.manager_id || null,
+      });
+      setUsers(users.map(u => u.id === user.id ? { ...u, is_active: newStatus } : u));
+      showToast('User status updated successfully', 'success');
+    } catch (err) {
+      console.error('Failed to toggle user status:', err);
+      showToast(err.message || 'Failed to toggle status', 'error');
+    }
+  };
+
+  const handleOpenCreateUser = () => {
+    setEditingUser(null);
+    setModalRole('sales_executive');
+    setUserCreationError('');
+    setUserCreationSuccess('');
+    setIsUserModalOpen(true);
+  };
+
+  const handleOpenEditUser = (user) => {
+    setEditingUser(user);
+    setModalRole((user.role || '').toLowerCase());
+    setUserCreationError('');
+    setUserCreationSuccess('');
+    setIsUserModalOpen(true);
   };
 
   const handleSaveUser = async (e) => {
@@ -237,28 +181,41 @@ export default function Admin({ user: propUser }) {
     const name = elements.name.value;
     const email = elements.email.value;
     const role = elements.role.value;
+    const managerId = elements.manager_id ? (elements.manager_id.value || null) : null;
 
     if (editingUser) {
-      // Keep local update for editing
-      const roleMap = {
-        admin: 'Admin',
-        sales_manager: 'Sales Manager',
-        sales_executive: 'Sales Executive',
-        leader: 'Leader',
-      };
-      const displayRole = roleMap[role] || role;
-      setUsers(users.map(u => u.id === editingUser.id ? { ...u, name, email, role: displayRole } : u));
-      showToast('User updated successfully');
-      setIsUserModalOpen(false);
-      setEditingUser(null);
+      if (role === 'sales_executive' && !managerId) {
+        setUserCreationError('Please select an assigned sales manager for the sales executive.');
+        return;
+      }
+
+      setUserCreationLoading(true);
+      try {
+        await updateUser(editingUser.id, {
+          name: name.trim(),
+          email: email.trim(),
+          role,
+          is_active: editingUser.is_active !== false,
+          manager_id: role === 'sales_executive' ? managerId : null,
+        });
+        showToast('User updated successfully.', 'success');
+        setIsUserModalOpen(false);
+        setEditingUser(null);
+        await loadUsers();
+      } catch (err) {
+        console.error('User update failed:', err);
+        setUserCreationError(err.message || 'An error occurred during user update.');
+      } finally {
+        setUserCreationLoading(false);
+      }
       return;
     }
 
-    const mobile = elements.mobile.value;
+    const mobile = elements.mobile?.value || '';
     const password = elements.password.value;
 
-    if (!name || !email || !mobile || !password || !role) {
-      setUserCreationError('All fields are required.');
+    if (!name || !email || !password || !role) {
+      setUserCreationError('Name, email, password, and role are required.');
       return;
     }
 
@@ -269,44 +226,50 @@ export default function Admin({ user: propUser }) {
       return;
     }
 
-    // Password validation consistent with onboarding step
-    if (password.length < 8 || !/[A-Z]/.test(password) || !/[0-9]/.test(password)) {
-      setUserCreationError('Password must be at least 8 characters and include 1 uppercase letter and 1 number.');
+    // Password validation: min 8 chars, 1 uppercase, 1 lowercase, 1 number, 1 special character
+    const hasUpper = /[A-Z]/.test(password);
+    const hasLower = /[a-z]/.test(password);
+    const hasDigit = /[0-9]/.test(password);
+    const hasSpecial = /[^A-Za-z0-9]/.test(password);
+
+    if (password.length < 8 || !hasUpper || !hasLower || !hasDigit || !hasSpecial) {
+      setUserCreationError('Password must be at least 8 characters and include at least 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character.');
+      return;
+    }
+
+    // Manager requirement for sales executive
+    if (role === 'sales_executive' && !managerId) {
+      setUserCreationError('Please select an assigned sales manager for the sales executive.');
       return;
     }
 
     setUserCreationLoading(true);
 
     try {
-      const responseData = await createUser({
-        name,
-        email,
-        mobile,
-        password,
+      const payload = {
+        name: name.trim(),
+        email: email.trim(),
         role,
-      });
-
-      setUserCreationSuccess('User created successfully.');
-      showToast('User created successfully');
-      
-      const roleMap = {
-        admin: 'Admin',
-        sales_manager: 'Sales Manager',
-        sales_executive: 'Sales Executive',
-        leader: 'Leader',
+        password,
       };
-      
-      const newUserId = responseData.user?.id || responseData.id || Date.now();
-      const newUser = {
-        id: newUserId,
-        name,
-        email,
-        role: roleMap[role] || role,
-        active: true,
-      };
-      setUsers([...users, newUser]);
 
-      e.target.reset();
+      if (mobile && mobile.trim()) {
+        payload.mobile = mobile.trim();
+      }
+
+      if (role === 'sales_executive' && managerId) {
+        payload.manager_id = managerId;
+      }
+
+      const responseData = await createUser(payload);
+
+      if (responseData.email_sent === false) {
+        showToast('User created, but welcome email failed.', 'warning');
+      } else {
+        showToast('User created successfully and welcome email sent.', 'success');
+      }
+
+      await loadUsers();
       setIsUserModalOpen(false);
     } catch (err) {
       console.error('User creation failed:', err);
@@ -322,10 +285,63 @@ export default function Admin({ user: propUser }) {
     }
   };
 
-  const tabs = [
-    { id: 'users', label: 'User Management', Icon: Users },
-    // { id: 'settings', label: 'Dropdown Settings', Icon: Settings },
-    { id: 'email', label: 'Email Automation', Icon: Mail }
+  const handleToggleDelegation = async (leaderId, permission, currentGranted) => {
+    setDelegationLoading(true);
+    try {
+      if (currentGranted) {
+        await revokeLeaderDelegation(leaderId, permission);
+        showToast(`Revoked ${permission}`);
+      } else {
+        await grantLeaderDelegation(leaderId, permission);
+        showToast(`Granted ${permission}`);
+      }
+
+      // Update state in modal & list
+      setUsers(prevUsers => prevUsers.map(u => {
+        if (u.id === leaderId) {
+          const prevPerms = u.permissions || [];
+          const updatedPerms = currentGranted
+            ? prevPerms.filter(p => p !== permission)
+            : [...prevPerms, permission];
+          return { ...u, permissions: updatedPerms };
+        }
+        return u;
+      }));
+
+      if (delegationModalLeader && delegationModalLeader.id === leaderId) {
+        const prevPerms = delegationModalLeader.permissions || [];
+        const updatedPerms = currentGranted
+          ? prevPerms.filter(p => p !== permission)
+          : [...prevPerms, permission];
+        setDelegationModalLeader({ ...delegationModalLeader, permissions: updatedPerms });
+      }
+    } catch (err) {
+      console.error('Failed to update delegation:', err);
+      showToast(err.message || 'Failed to update delegation');
+    } finally {
+      setDelegationLoading(false);
+    }
+  };
+
+  const roleDisplay = (role) => {
+    switch ((role || '').toLowerCase()) {
+      case 'admin': return 'Admin';
+      case 'leader': return 'Leader';
+      case 'sales_manager': return 'Sales Manager';
+      case 'sales_executive': return 'Sales Executive';
+      default: return role;
+    }
+  };
+
+  const activeSalesManagers = users.filter(u => (u.role || '').toLowerCase() === 'sales_manager' && u.is_active !== false);
+
+  const DELEGABLE_PERMISSIONS = [
+    { key: 'user.view', label: 'View Users', desc: 'Can view team members list and details' },
+    { key: 'user.create', label: 'Create Users', desc: 'Can create new users in the system' },
+    { key: 'user.update', label: 'Update Users', desc: 'Can modify user details and credentials' },
+    { key: 'user.delete', label: 'Delete / Deactivate Users', desc: 'Can deactivate or delete users' },
+    { key: 'manager.manage', label: 'Manage Managers', desc: 'Can assign sales executives to managers' },
+    { key: 'system.settings.manage', label: 'Manage Settings', desc: 'Can configure system and master settings' },
   ];
 
   return (
@@ -343,55 +359,116 @@ export default function Admin({ user: propUser }) {
       </div>
 
       <div className="admin-content card">
-        {activeTab === 'users' && (
+        {activeTab === 'users' && canViewUsers && (
           <div className="tab-pane">
             <div className="pane-header">
-              <h3>Team Members</h3>
-              {isAdmin && (
-                <button className="btn-primary" onClick={() => { setEditingUser(null); setIsUserModalOpen(true); }}>
+              <div>
+                <h3>Team Members</h3>
+                <p style={{ color: 'var(--color-text-muted)', fontSize: '13px', margin: 0 }}>
+                  Manage users, roles, manager hierarchy, and administrative delegations
+                </p>
+              </div>
+              {canCreateUser && (
+                <button className="btn-primary" onClick={handleOpenCreateUser}>
                   <Plus size={16} /> Add Member
                 </button>
               )}
             </div>
-            <div className="table-wrapper">
-              <table>
-                <thead>
-                  <tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th>{isAdmin && <th>Actions</th>}</tr>
-                </thead>
-                <tbody>
-                  {users.map(user => (
-                    <tr key={user.id}>
-                      <td className="font-medium">{user.name}</td>
-                      <td>{user.email}</td>
-                      <td><span className="role-badge">{user.role}</span></td>
-                      <td>
-                        <label className="toggle-switch">
-                          <input type="checkbox" checked={user.active} onChange={() => toggleUser(user.id)} disabled={!isAdmin} />
-                          <span className="slider"></span>
-                        </label>
-                      </td>
-                      {isAdmin && (
-                        <td>
-                          <button className="icon-btn edit" title="Edit" onClick={() => { setEditingUser(user); setIsUserModalOpen(true); }}>
-                            <Edit2 size={16} />
-                          </button>
-                        </td>
-                      )}
+
+            {loadingUsers ? (
+              <div style={{ padding: '32px', textAlign: 'center', color: 'var(--color-text-muted)' }}>
+                Loading team members...
+              </div>
+            ) : (
+              <div className="table-wrapper">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Email</th>
+                      <th>Role</th>
+                      <th>Manager</th>
+                      <th>Status</th>
+                      {(canUpdateUser || isAdmin) && <th>Actions</th>}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {users.map(u => {
+                      const isExecutive = (u.role || '').toLowerCase() === 'sales_executive';
+                      const isLeader = (u.role || '').toLowerCase() === 'leader';
+                      const isActive = u.is_active !== false;
+
+                      return (
+                        <tr key={u.id}>
+                          <td className="font-medium">{u.name}</td>
+                          <td>{u.email}</td>
+                          <td><span className="role-badge">{roleDisplay(u.role)}</span></td>
+                          <td>
+                            {isExecutive ? (
+                              u.manager_name ? (
+                                <span style={{ fontSize: '13px', fontWeight: '500' }}>{u.manager_name}</span>
+                              ) : (
+                                <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Unassigned</span>
+                              )
+                            ) : (
+                              <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>—</span>
+                            )}
+                          </td>
+                          <td>
+                            <label className="toggle-switch">
+                              <input
+                                type="checkbox"
+                                checked={isActive}
+                                onChange={() => toggleUser(u)}
+                                disabled={!canDeleteUser}
+                              />
+                              <span className="slider"></span>
+                            </label>
+                          </td>
+                          {(canUpdateUser || isAdmin) && (
+                            <td>
+                              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                {canUpdateUser && (
+                                  <button
+                                    className="icon-btn edit"
+                                    title="Edit user"
+                                    onClick={() => handleOpenEditUser(u)}
+                                  >
+                                    <Edit2 size={16} />
+                                  </button>
+                                )}
+                                {isAdmin && isLeader && (
+                                  <button
+                                    className="btn-secondary"
+                                    style={{ fontSize: '12px', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                                    title="Manage leader delegations"
+                                    onClick={() => setDelegationModalLeader(u)}
+                                  >
+                                    <Shield size={14} />
+                                    <span>Delegations ({u.permissions?.length || 0})</span>
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
+                    {users.length === 0 && (
+                      <tr>
+                        <td colSpan={6} style={{ textAlign: 'center', padding: '24px', color: 'var(--color-text-muted)' }}>
+                          No team members found.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
 
-        {activeTab === 'settings' && (
-          <div className="tab-pane">
-            <MasterDataSettings />
-          </div>
-        )}
-
-        {activeTab === 'email' && (
+        {activeTab === 'email' && isAdmin && (
           <div className="tab-pane email-automation">
             <div className="pane-header"><h3>Email Automation</h3></div>
             <div className="email-form">
@@ -450,8 +527,12 @@ export default function Admin({ user: propUser }) {
         )}
       </div>
 
+      {/* Add / Edit Member Modal */}
       {isUserModalOpen && (
-        <ModalWrapper title={editingUser ? 'Edit Member' : 'Add New Member'} onClose={() => { setIsUserModalOpen(false); setUserCreationError(''); setUserCreationSuccess(''); }}>
+        <ModalWrapper
+          title={editingUser ? 'Edit Member' : 'Add New Member'}
+          onClose={() => { setIsUserModalOpen(false); setUserCreationError(''); setUserCreationSuccess(''); }}
+        >
           <form onSubmit={handleSaveUser} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {userCreationError && (
               <div style={{ color: '#EF4444', backgroundColor: 'rgba(239, 68, 68, 0.1)', padding: '10px', borderRadius: '6px', fontSize: '13px', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
@@ -469,11 +550,10 @@ export default function Admin({ user: propUser }) {
             {!editingUser && (
               <>
                 <div>
-                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500' }}>Mobile Number</label>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500' }}>Mobile Number (Optional)</label>
                   <input
                     name="mobile"
                     type="tel"
-                    required
                     disabled={userCreationLoading}
                     style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)' }}
                   />
@@ -498,34 +578,65 @@ export default function Admin({ user: propUser }) {
                     </button>
                   </div>
                   <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '4px', display: 'block' }}>
-                    At least 8 characters, 1 uppercase letter, 1 number.
+                    Must be at least 8 characters, with 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character.
                   </span>
                 </div>
               </>
             )}
 
-            <FormInput 
-              label="Role" 
-              name="role" 
-              as="select" 
-              defaultValue={
-                editingUser ? (
-                  editingUser.role === 'Admin' ? 'admin' :
-                  editingUser.role === 'Sales Manager' ? 'sales_manager' :
-                  editingUser.role === 'Sales Executive' ? 'sales_executive' :
-                  editingUser.role === 'Leader' ? 'leader' : 'sales_executive'
-                ) : 'sales_executive'
-              } 
-              disabled={userCreationLoading}
-            >
-              <option value="admin">Admin</option>
-              <option value="sales_manager">Sales Manager</option>
-              <option value="sales_executive">Sales Executive</option>
-              <option value="leader">Leader</option>
-            </FormInput>
+            <div>
+              <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500' }}>Role</label>
+              <select
+                name="role"
+                value={modalRole}
+                onChange={(e) => setModalRole(e.target.value)}
+                disabled={userCreationLoading}
+                style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)' }}
+              >
+                <option value="sales_executive">Sales Executive</option>
+                <option value="sales_manager">Sales Manager</option>
+                <option value="leader">Leader</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+
+            {/* Manager Assignment field - Only for sales executives */}
+            {modalRole === 'sales_executive' && (
+              <div>
+                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500' }}>
+                  Assigned Sales Manager <span style={{ color: '#EF4444' }}>*</span>
+                </label>
+                <select
+                  name="manager_id"
+                  defaultValue={editingUser?.manager_id || ''}
+                  required
+                  disabled={userCreationLoading}
+                  style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)' }}
+                >
+                  <option value="">-- Select Sales Manager --</option>
+                  {activeSalesManagers.map(mgr => (
+                    <option key={mgr.id} value={mgr.id}>
+                      {mgr.name} ({mgr.email})
+                    </option>
+                  ))}
+                </select>
+                {activeSalesManagers.length === 0 && (
+                  <span style={{ fontSize: '12px', color: '#EF4444', marginTop: '4px', display: 'block' }}>
+                    No active Sales Managers available. Please create or activate a Sales Manager first.
+                  </span>
+                )}
+              </div>
+            )}
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '16px' }}>
-              <button type="button" className="btn-secondary" onClick={() => { setIsUserModalOpen(false); setUserCreationError(''); setUserCreationSuccess(''); }} disabled={userCreationLoading}>Cancel</button>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => { setIsUserModalOpen(false); setUserCreationError(''); setUserCreationSuccess(''); }}
+                disabled={userCreationLoading}
+              >
+                Cancel
+              </button>
               <button type="submit" className="btn-primary" disabled={userCreationLoading}>
                 {userCreationLoading ? 'Saving...' : 'Save'}
               </button>
@@ -534,7 +645,70 @@ export default function Admin({ user: propUser }) {
         </ModalWrapper>
       )}
 
-      {toastMessage && <div className="toast">{toastMessage}</div>}
+      {/* Leader Delegation Management Modal (Admin Only) */}
+      {delegationModalLeader && isAdmin && (
+        <ModalWrapper
+          title={`Leader Delegations: ${delegationModalLeader.name}`}
+          onClose={() => setDelegationModalLeader(null)}
+          maxWidth="480px"
+          bodyClassName="delegation-modal-body"
+        >
+          <div className="delegation-modal-container">
+            <p className="delegation-modal-desc">
+              Admins can grant or revoke specific administrative privileges to Leaders. Leaders have unrestricted sales data visibility by default.
+            </p>
+
+            <div className="delegation-permissions-list hide-scrollbar">
+              {DELEGABLE_PERMISSIONS.map(p => {
+                const isGranted = (delegationModalLeader.permissions || []).includes(p.key);
+                return (
+                  <div
+                    key={p.key}
+                    className={`delegation-perm-card ${isGranted ? 'granted' : ''}`}
+                    onClick={() => {
+                      if (!delegationLoading) {
+                        handleToggleDelegation(delegationModalLeader.id, p.key, isGranted);
+                      }
+                    }}
+                  >
+                    <div className="delegation-checkbox-container">
+                      <input
+                        type="checkbox"
+                        id={`perm-${p.key}`}
+                        checked={isGranted}
+                        disabled={delegationLoading}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          handleToggleDelegation(delegationModalLeader.id, p.key, isGranted);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="delegation-checkbox-input"
+                      />
+                    </div>
+                    <div className="delegation-perm-info">
+                      <div className="delegation-perm-title">{p.label}</div>
+                      <div className="delegation-perm-desc">{p.desc}</div>
+                      <div className="delegation-perm-badge-wrapper">
+                        <code className="delegation-perm-key">{p.key}</code>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="delegation-modal-footer">
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => setDelegationModalLeader(null)}
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </ModalWrapper>
+      )}
     </div>
   );
-}
+}

@@ -1,14 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import LeadProfile, { LIFECYCLE_PIPELINES } from './LeadProfile';
 import { X, Edit2, Trash2, Phone, Mail, Calendar, Download, Plus, MoreVertical, Sparkles, Calculator, RotateCcw } from 'lucide-react';
 import { fetchCurrentUsers, fetchMasterStages, fetchLeads, fetchLeadById, updateLead, createLead, deleteLead } from '../services/leadService';
+import { useToast, useConfirm } from '../context/FeedbackContext';
 import './Leads.css';
 
 import { initialLeadsData } from './mockLeads';
 export { initialLeadsData };
 
 export default function Leads() {
+  const showToast = useToast();
+  const confirm = useConfirm();
   const { id: urlLeadId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -236,7 +239,7 @@ export default function Leads() {
 
   const handleClassificationSave = async () => {
     if (classStatus === 'Lost' && (!classLostReason || !classLostReason.trim())) {
-      alert('Please provide a reason for marking this lead as Lost.');
+      showToast('Please provide a reason for marking this lead as Lost.', 'warning');
       return;
     }
 
@@ -270,10 +273,11 @@ export default function Leads() {
 
     try {
       await updateLead(classificationLead.id, updatedPayload);
+      showToast('Lead status updated successfully', 'success');
     } catch (err) {
       console.error('Failed to save classification details:', err);
       setLeads(previousLeads);
-      alert(err.message || 'Unable to update lead. Please try again.');
+      showToast(err.message || 'Unable to update lead. Please try again.', 'error');
     }
   };
 
@@ -307,7 +311,7 @@ export default function Leads() {
     const updatedLostReason = lostReasonInput ? lostReasonInput.value : '';
 
     if (updatedStatus === 'Lost' && (!updatedLostReason || !updatedLostReason.trim())) {
-      alert('Please provide a reason for marking this lead as Lost.');
+      showToast('Please provide a reason for marking this lead as Lost.', 'warning');
       return;
     }
 
@@ -344,11 +348,12 @@ export default function Leads() {
         lostReason: updatedStatus === 'Lost' ? updatedLostReason : undefined,
       };
       await updateLead(selectedLead.id, payload);
+      showToast('Changes saved successfully', 'success');
     } catch (err) {
       console.error('Failed to update lead:', err);
       setLeads(previousLeads);
       setSelectedLead(previousSelectedLead);
-      alert(err.message || 'Unable to update lead. Please try again.');
+      showToast(err.message || 'Unable to update lead. Please try again.', 'error');
     }
   };
 
@@ -537,6 +542,7 @@ export default function Leads() {
                   setLeads(prevLeads => prevLeads.map(l =>
                     l.id === selectedLead.id ? { ...l, ...saved } : l
                   ));
+                  showToast('Changes saved successfully', 'success');
                 } else {
                   // CREATE: send to backend, use backend response as the new lead
                   const res = await createLead(backendPayload);
@@ -544,6 +550,7 @@ export default function Leads() {
                   if (created && created.id) {
                     setLeads(prevLeads => [created, ...prevLeads]);
                   }
+                  showToast('Lead created successfully', 'success');
                 }
                 // Refresh full leads list from backend
                 try {
@@ -552,7 +559,7 @@ export default function Leads() {
                 } catch { /* non-critical */ }
               } catch (err) {
                 console.error('Failed to save lead:', err);
-                alert(err.message || 'Failed to save lead.');
+                showToast(err.message || 'Failed to save lead.', 'error');
                 return; // don't navigate away on error
               } finally {
                 setIsCreatingLead(false);
@@ -858,17 +865,25 @@ export default function Leads() {
                             onClick={async (e) => {
                               e.stopPropagation();
                               setOpenMenuId(null);
-                              if (window.confirm('Are you sure you want to delete this lead?')) {
-                                const previousLeads = [...leads];
-                                setLeads(prevLeads => prevLeads.filter(l => l.id !== lead.id));
-                                if (selectedLead?.id === lead.id) setSelectedLead(null);
-                                try {
-                                  await deleteLead(lead.id);
-                                } catch (err) {
-                                  console.error('Failed to delete lead:', err);
-                                  setLeads(previousLeads);
-                                  alert(err.message || 'Failed to delete lead.');
-                                }
+                              const confirmed = await confirm({
+                                title: 'Delete Lead?',
+                                message: `Are you sure you want to delete lead "${lead.contact || lead.company}"? This action cannot be undone.`,
+                                confirmText: 'Delete',
+                                cancelText: 'Cancel',
+                                variant: 'danger',
+                              });
+                              if (!confirmed) return;
+
+                              const previousLeads = [...leads];
+                              setLeads(prevLeads => prevLeads.filter(l => l.id !== lead.id));
+                              if (selectedLead?.id === lead.id) setSelectedLead(null);
+                              try {
+                                await deleteLead(lead.id);
+                                showToast('Deleted successfully', 'success');
+                              } catch (err) {
+                                console.error('Failed to delete lead:', err);
+                                setLeads(previousLeads);
+                                showToast(err.message || 'Failed to delete lead.', 'error');
                               }
                             }}
                             style={{

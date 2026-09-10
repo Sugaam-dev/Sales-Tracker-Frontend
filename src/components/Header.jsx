@@ -3,6 +3,7 @@ import { Search, Plus, Bell, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import QuickCreateLeadModal from './QuickCreateLeadModal';
 import { createLead } from '../services/leadService';
+import { useToast } from '../context/FeedbackContext';
 import './Header.css';
 
 const SEARCH_DATA = [
@@ -34,11 +35,11 @@ const NOTIFICATIONS = [
 
 export default function Header() {
   const navigate = useNavigate();
+  const showToast = useToast();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [toastMessage, setToastMessage] = useState('');
   const [showBanner, setShowBanner] = useState(false);
 
   useEffect(() => {
@@ -102,15 +103,14 @@ export default function Header() {
 
       await createLead(payload);
       setIsModalOpen(false);
-      setToastMessage('Lead created - Added to pipeline');
+      showToast('Lead created successfully', 'success');
       
       setTimeout(() => {
-        setToastMessage('');
         // Reload page to show the new lead in the list
         if (window.location.pathname === '/leads') {
           window.location.reload();
         }
-      }, 1500);
+      }, 1200);
     } catch (err) {
       console.error('Quick Create Error:', err);
       // Re-throw so QuickCreateLeadModal catches it and displays exact backend message
@@ -292,12 +292,6 @@ export default function Header() {
     onClose={() => setIsModalOpen(false)}
     onCreate={handleCreateLead}
   />
-
-  {toastMessage && (
-    <div className="toast">
-      {toastMessage}
-    </div>
-  )}
 </>
   );
 }

@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { logout } from './services/authService';
+import { logout, canAccessAdmin } from './services/authService';
 
 // We'll create these files shortly
 import Login from './pages/Login';
@@ -8,6 +8,7 @@ import Onboarding from './pages/Onboarding';
 import MfaVerify from './pages/MfaVerify';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
+import ChangePassword from './pages/ChangePassword';
 import Dashboard from './pages/Dashboard';
 import Leads from './pages/Leads';
 import Activities from './pages/Activities';
@@ -16,7 +17,9 @@ import Admin from './pages/Admin';
 import Import from './pages/Import';
 import CommercialEstimation from './pages/CommercialEstimation';
 import SSOSuccess from './pages/SSOSuccess';
+import AccountSettings from './pages/AccountSettings';
 import Layout from './components/Layout';
+import { FeedbackProvider } from './context/FeedbackContext';
 
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
@@ -25,7 +28,8 @@ function App() {
   useEffect(() => {
     const savedUser = localStorage.getItem('user');
     const savedToken = localStorage.getItem('token');
-    if (savedUser && savedToken) {
+    const pwdChangeReq = localStorage.getItem('password_change_required');
+    if (savedUser && savedToken && pwdChangeReq !== 'true') {
       try {
         setCurrentUser(JSON.parse(savedUser));
       } catch (e) {
@@ -56,39 +60,53 @@ function App() {
 
   return (
     <Router>
-      <Routes>
-        <Route 
-          path="/login" 
-          element={<Login onLogin={setCurrentUser} />} 
-        />
-        <Route 
-          path="/sso-success" 
-          element={<SSOSuccess onLogin={setCurrentUser} />} 
-        />
-        <Route
-          path="/onboarding"
-          element={<Onboarding onLogin={setCurrentUser} />}
-        />
-        <Route
-          path="/mfa-verify"
-          element={<MfaVerify onLogin={setCurrentUser} />}
-        />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
-        
-        {/* Protected Routes wrapper (mocked for prototype) */}
-        <Route element={currentUser ? <Layout user={currentUser} onLogout={handleLogout} /> : <Navigate to="/login" replace />}>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/leads" element={<Leads />} />
-          <Route path="/leads/:id" element={<Leads />} />
-          <Route path="/commercial-estimation" element={<CommercialEstimation />} />
-          <Route path="/activities" element={<Activities />} />
-          <Route path="/reports" element={<Reports />} />
-          <Route path="/admin" element={<Admin user={currentUser} />} />
-          <Route path="/import" element={<Import />} />
-        </Route>
-      </Routes>
+      <FeedbackProvider>
+        <Routes>
+          <Route 
+            path="/login" 
+            element={<Login onLogin={setCurrentUser} />} 
+          />
+          <Route 
+            path="/sso-success" 
+            element={<SSOSuccess onLogin={setCurrentUser} />} 
+          />
+          <Route
+            path="/onboarding"
+            element={<Onboarding onLogin={setCurrentUser} />}
+          />
+          <Route
+            path="/mfa-verify"
+            element={<MfaVerify onLogin={setCurrentUser} />}
+          />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/change-password" element={<ChangePassword />} />
+          
+          {/* Protected Routes wrapper */}
+          <Route element={currentUser ? <Layout user={currentUser} onLogout={handleLogout} /> : <Navigate to="/login" replace />}>
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/leads" element={<Leads />} />
+            <Route path="/leads/:id" element={<Leads />} />
+            <Route path="/commercial-estimation" element={<CommercialEstimation />} />
+            <Route path="/activities" element={<Activities />} />
+            <Route path="/reports" element={<Reports />} />
+            <Route 
+              path="/admin" 
+              element={
+                canAccessAdmin(currentUser) ? (
+                  <Admin user={currentUser} />
+                ) : (
+                  <Navigate to="/dashboard" replace />
+                )
+              } 
+            />
+            <Route path="/import" element={<Import />} />
+            <Route path="/settings" element={<AccountSettings user={currentUser} onLogout={handleLogout} />} />
+            <Route path="/account" element={<Navigate to="/settings" replace />} />
+          </Route>
+        </Routes>
+      </FeedbackProvider>
     </Router>
   );
 }

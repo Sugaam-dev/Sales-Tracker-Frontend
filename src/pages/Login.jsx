@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { login, storeSession, deriveUser } from '../services/authService';
@@ -34,6 +34,20 @@ export default function Login({ onLogin }) {
     try {
       const response = await login(email, password);
 
+      if (response.first_time_login || response.password_change_required) {
+        if (response.access_token) {
+          localStorage.setItem('token', response.access_token);
+          localStorage.setItem('password_change_required', 'true');
+        }
+        navigate('/change-password', {
+          state: {
+            firstTimeLogin: true,
+            message: response.message || 'Password change required before proceeding',
+          },
+        });
+        return;
+      }
+
       if (response.requires_onboarding) {
         navigate('/onboarding', { state: { tempToken: response.temp_token } });
         return;
@@ -45,6 +59,7 @@ export default function Login({ onLogin }) {
       }
 
       if (response.access_token && response.user) {
+        localStorage.removeItem('password_change_required');
         storeSession(response);
         onLogin(deriveUser(response.user));
         navigate('/dashboard');

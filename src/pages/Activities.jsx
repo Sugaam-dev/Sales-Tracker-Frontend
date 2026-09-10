@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Phone, Mail, Calendar, MonitorPlay, Globe, Plus, X, Play, Pause, Paperclip, FileText, CheckCircle2, Clock, Sparkles, RefreshCw, ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { fetchLeads, fetchCurrentUsers, fetchActivitiesFeed, fetchActivitiesSummary, logGlobalActivity } from '../services/leadService';
+import { useToast } from '../context/FeedbackContext';
 import './Activities.css';
 
 // Helper to determine icon and color class for activity types
@@ -20,11 +21,12 @@ const getActivityMeta = (type) => {
     case 'Proposal Sent':
       return { icon: <Mail size={14} />, colorClass: 'proposal-icon' };
     default:
-      return { icon: <FileText size={14} />, colorClass: 'other-icon' };
+      return { icon: <CheckCircle2 size={14} />, colorClass: 'task-icon' };
   }
 };
 
 export default function Activities() {
+  const showToast = useToast();
   const [activeFilter, setActiveFilter] = useState('All Activity Types');
   const [userFilter, setUserFilter] = useState('All Users');
   const [leadFilter, setLeadFilter] = useState('All Leads');
@@ -818,8 +820,8 @@ ${selectedActivity.rep}`}
                   
                   {/* Quick Actions */}
                   <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '8px' }}>
-                    <button className="btn-secondary" style={{ padding: '8px 16px', fontSize: '13px' }} onClick={() => alert('Reply simulation started!')}>Reply</button>
-                    <button className="btn-primary" style={{ padding: '8px 16px', fontSize: '13px' }} onClick={() => alert('Email resent successfully!')}>Resend Email</button>
+                    <button className="btn-secondary" style={{ padding: '8px 16px', fontSize: '13px' }} onClick={() => showToast('Reply simulation started!', 'info')}>Reply</button>
+                    <button className="btn-primary" style={{ padding: '8px 16px', fontSize: '13px' }} onClick={() => showToast('Email resent successfully!', 'success')}>Resend Email</button>
                   </div>
                 </div>
               )}
@@ -996,8 +998,8 @@ ${selectedActivity.rep}`}
                   </div>
 
                   <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '8px' }}>
-                    <button className="btn-secondary" style={{ padding: '8px 16px', fontSize: '13px' }} onClick={() => alert('Calendar event logged!')}>View in Calendar</button>
-                    <button className="btn-primary" style={{ padding: '8px 16px', fontSize: '13px' }} onClick={() => alert('Thank you note sent to client!')}>Send Thank You Note</button>
+                    <button className="btn-secondary" style={{ padding: '8px 16px', fontSize: '13px' }} onClick={() => showToast('Calendar event logged!', 'info')}>View in Calendar</button>
+                    <button className="btn-primary" style={{ padding: '8px 16px', fontSize: '13px' }} onClick={() => showToast('Thank you note sent to client!', 'success')}>Send Thank You Note</button>
                   </div>
                 </div>
               )}
@@ -1048,8 +1050,8 @@ ${selectedActivity.rep}`}
                   </div>
 
                   <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '8px' }}>
-                    <button className="btn-secondary" style={{ padding: '8px 16px', fontSize: '13px' }} onClick={() => alert('SLA document generated!')}>Edit Document</button>
-                    <button className="btn-primary" style={{ padding: '8px 16px', fontSize: '13px' }} onClick={() => alert('Proposal approved and status updated!')}>Mark as Approved</button>
+                    <button className="btn-secondary" style={{ padding: '8px 16px', fontSize: '13px' }} onClick={() => showToast('SLA document generated!', 'info')}>Edit Document</button>
+                    <button className="btn-primary" style={{ padding: '8px 16px', fontSize: '13px' }} onClick={() => showToast('Proposal approved and status updated!', 'success')}>Mark as Approved</button>
                   </div>
                 </div>
               )}
@@ -1063,7 +1065,7 @@ ${selectedActivity.rep}`}
                   </div>
 
                   <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '8px' }}>
-                    <button className="btn-primary" style={{ padding: '8px 16px', fontSize: '13px' }} onClick={() => alert('Task generated successfully!')}>Convert to Task</button>
+                    <button className="btn-primary" style={{ padding: '8px 16px', fontSize: '13px' }} onClick={() => showToast('Task generated successfully!', 'success')}>Convert to Task</button>
                   </div>
                 </div>
               )}
