@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, Users, Activity, BarChart2, Settings, Download, LogOut, ChevronDown, X } from 'lucide-react';
+import { canAccessAdmin } from '../services/authService';
 import './Sidebar.css';
 
 export default function Sidebar({ user, onLogout }) {
@@ -12,7 +13,7 @@ export default function Sidebar({ user, onLogout }) {
     { name: 'Leads', path: '/leads', icon: <Users size={20} /> },
     { name: 'Activities', path: '/activities', icon: <Activity size={20} /> },
     { name: 'Reports', path: '/reports', icon: <BarChart2 size={20} /> },
-    { name: 'Admin', path: '/admin', icon: <Settings size={20} /> },
+    ...(canAccessAdmin(user) ? [{ name: 'Admin', path: '/admin', icon: <Settings size={20} /> }] : []),
     { name: 'Import', path: '/import', icon: <Download size={20} /> },
   ];
 

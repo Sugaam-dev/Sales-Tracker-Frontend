@@ -73,30 +73,66 @@ export async function verifyMFA(mfaPendingToken, otp) {
 // (name, initials, role label) from the trimmed-down user summary the
 // backend returns.
 export function deriveUser(user) {
-  const emailParts = user.email.split('@')[0].split(/[._-]/);
-  const derivedName = emailParts
+  if (!user) return null;
+  const emailParts = (user.email || '').split('@')[0].split(/[._-]/);
+  const derivedName = user.name || emailParts
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
-  const derivedInitials = emailParts
+  const derivedInitials = user.name
+    ? user.name.split(' ').map((p) => p[0]).join('').slice(0, 2).toUpperCase()
+    : emailParts
     .map((part) => part.charAt(0).toUpperCase())
     .join('')
     .slice(0, 2);
 
+  const rawRole = (user.role || '').toLowerCase();
   const roleMap = {
     admin: 'Admin',
     sales_manager: 'Sales Manager',
     sales_executive: 'Sales Executive',
     leader: 'Leader',
   };
-  const displayRole = roleMap[user.role] || user.role;
+  const displayRole = roleMap[rawRole] || user.role;
 
   return {
     id: user.id,
     name: derivedName,
+    rawRole: rawRole,
     role: displayRole,
     initials: derivedInitials || 'U',
     email: user.email,
+    permissions: user.permissions || [],
+    manager_id: user.manager_id || null,
+    manager_name: user.manager_name || null,
   };
+}
+
+export function hasPermission(user, permission) {
+  if (!user) return false;
+  const role = (user.rawRole || user.role || '').toLowerCase();
+  if (role === 'admin') return true;
+  if (user.permissions && Array.isArray(user.permissions)) {
+    return user.permissions.includes(permission);
+  }
+  return false;
+}
+
+export function canAccessAdmin(user) {
+  if (!user) return false;
+  const role = (user.rawRole || user.role || '').toLowerCase();
+  if (role === 'admin') return true;
+  if (role === 'leader') {
+    const adminPerms = [
+      'user.view',
+      'user.create',
+      'user.update',
+      'user.delete',
+      'manager.manage',
+      'system.settings.manage',
+    ];
+    return adminPerms.some((p) => hasPermission(user, p));
+  }
+  return false;
 }
 
 export function clearLocalSession() {
@@ -232,4 +268,101 @@ export function storeSession(response) {
   if (response.user) {
     localStorage.setItem('user', JSON.stringify(deriveUser(response.user)));
   }
+}
+
+export async function fetchUsers() {
+  const response = await authenticatedFetch(API.USERS);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to fetch users.');
+  }
+  return data.data || data;
+}
+
+export async function updateUser(id, userData) {
+  const response = await authenticatedFetch(`${API.USERS}/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(userData),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to update user.');
+  }
+  return data.data || data;
+}
+
+export async function deleteUser(id) {
+  const response = await authenticatedFetch(`${API.USERS}/${id}`, {
+    method: 'DELETE',
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to delete user.');
+  }
+  return data;
+}
+
+export async function assignManager(executiveId, managerId) {
+  const response = await authenticatedFetch(`${API.USERS}/${executiveId}/manager`, {
+    method: 'PATCH',
+    body: JSON.stringify({ manager_id: managerId }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to assign manager.');
+  }
+  return data;
+}
+
+export async function fetchLeaderDelegations(leaderId) {
+  const response = await authenticatedFetch(`${API.USERS}/${leaderId}/delegations`);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to fetch delegations.');
+  }
+  return data.data || data;
+}
+
+export async function grantLeaderDelegation(leaderId, permission) {
+  const response = await authenticatedFetch(`${API.USERS}/${leaderId}/delegations`, {
+    method: 'POST',
+    body: JSON.stringify({ permission }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to grant delegation.');
+  }
+  return data;
+}
+
+export async function revokeLeaderDelegation(leaderId, permission) {
+  const response = await authenticatedFetch(`${API.USERS}/${leaderId}/delegations/${permission}`, {
+    method: 'DELETE',
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to revoke delegation.');
+  }
+  return data;
+}
+
+export async function fetchMyPermissions() {
+  const response = await authenticatedFetch(API.MY_PERMISSIONS);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to fetch permissions.');
+  }
+  return data.data || data;
+}
+
+export async function changePassword(newPassword) {
+  const response = await authenticatedFetch(API.CHANGE_PASSWORD, {
+    method: 'POST',
+    body: JSON.stringify({ new_password: newPassword }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to change password.');
+  }
+  return data;
 }

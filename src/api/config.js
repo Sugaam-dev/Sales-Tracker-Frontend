@@ -26,6 +26,8 @@ export const API = {
   ACTIVITIES_SUMMARY: `${BASE_URL}/activities/summary`,
   DASHBOARD_SUMMARY: `${BASE_URL}/dashboard/summary`,
   REPORTS_ANALYTICS: `${BASE_URL}/reports/analytics`,
+  MY_PERMISSIONS: `${BASE_URL}/auth/me/permissions`,
+  CHANGE_PASSWORD: `${BASE_URL}/auth/change-password`,
 };
 
 export const authHeaders = () => {
