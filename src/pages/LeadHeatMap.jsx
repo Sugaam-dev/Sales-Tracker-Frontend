@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { initialLeadsData } from './Leads';
+import { fetchHeatMapReport } from '../services/leadService';
 
 const matchRep = (leadOwner, repName) => {
   if (!leadOwner) return false;
@@ -118,6 +119,17 @@ export default function LeadHeatMap() {
   const [metric, setMetric]   = useState('value'); // 'value' | 'leads'
   const [selectedCellLeads, setSelectedCellLeads] = useState(null); // { rep, stage, leads: [...] }
   const [showAllLeads, setShowAllLeads] = useState(false);
+  const [backendHeatMapData, setBackendHeatMapData] = useState(null);
+
+  useEffect(() => {
+    fetchHeatMapReport()
+      .then(res => {
+        if (res && res.data) {
+          setBackendHeatMapData(res.data);
+        }
+      })
+      .catch(err => console.error("Failed to load backend heatmap report", err));
+  }, []);
 
   const handleCellClick = (repName, stageName) => {
     const cellLeads = initialLeadsData.filter(l => {
