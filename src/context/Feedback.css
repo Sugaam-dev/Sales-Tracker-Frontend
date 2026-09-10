@@ -1,0 +1,218 @@
+/* ==========================================================================
+   Standardized Feedback System (Toast & Confirmation Modal)
+   ========================================================================== */
+
+/* ─── Toast Container & Items ─────────────────────────────────────────────── */
+.toast-container {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 9999;
+  pointer-events: none;
+  max-width: 440px;
+  width: calc(100vw - 48px);
+}
+
+.toast-item {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 18px;
+  border-radius: var(--radius-md, 8px);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: #ffffff;
+  animation: toastSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.toast-item.toast-success {
+  background-color: #059669;
+}
+
+.toast-item.toast-error {
+  background-color: #dc2626;
+}
+
+.toast-item.toast-warning {
+  background-color: #d97706;
+}
+
+.toast-item.toast-info {
+  background-color: #2563eb;
+}
+
+.toast-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toast-message {
+  flex: 1;
+  word-break: break-word;
+}
+
+.toast-close-btn {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  flex-shrink: 0;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.toast-close-btn:hover {
+  color: #ffffff;
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
+@keyframes toastSlideIn {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* ─── Confirmation Modal Overlay ─────────────────────────────────────────── */
+.confirmation-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9998;
+  padding: 16px;
+  animation: fadeIn 0.2s ease;
+}
+
+.confirmation-modal {
+  background-color: var(--color-surface, #ffffff);
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: var(--shadow-lg, 0 20px 25px -5px rgba(0, 0, 0, 0.1));
+  border: 1px solid var(--color-border, #e2e8f0);
+  width: 100%;
+  max-width: 440px;
+  overflow: hidden;
+  animation: modalScaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.confirmation-content {
+  padding: 24px;
+}
+
+.confirmation-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.confirmation-icon-wrap {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.confirmation-icon-wrap.danger {
+  background-color: #fee2e2;
+  color: #dc2626;
+}
+
+.confirmation-icon-wrap.warning {
+  background-color: #fef3c7;
+  color: #d97706;
+}
+
+.confirmation-icon-wrap.info,
+.confirmation-icon-wrap.primary {
+  background-color: #dbeafe;
+  color: #2563eb;
+}
+
+.confirmation-header-text {
+  flex: 1;
+}
+
+.confirmation-title {
+  margin: 0 0 6px 0;
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--color-text-main, #0f172a);
+}
+
+.confirmation-message {
+  margin: 0;
+  font-size: 14px;
+  color: var(--color-text-muted, #64748b);
+  line-height: 1.5;
+}
+
+.confirmation-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.btn-danger {
+  background-color: #dc2626;
+  color: #ffffff;
+  border: 1px solid #dc2626;
+  padding: 8px 16px;
+  border-radius: var(--radius-md, 6px);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s ease, opacity 0.15s ease;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background-color: #b91c1c;
+  border-color: #b91c1c;
+}
+
+.btn-danger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modalScaleIn {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}

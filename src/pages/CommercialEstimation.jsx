@@ -10,6 +10,7 @@ import {
   LineChart, Line
 } from 'recharts';
 import { fetchCommercial, updateCommercial, fetchCommercialAnalytics } from '../services/commercialService';
+import { useToast } from '../context/FeedbackContext';
 import './CommercialEstimation.css';
 
 const STANDARD_ROLES = [
@@ -80,6 +81,7 @@ const CURRENCY_RATES = {
 };
 
 export default function CommercialEstimation() {
+  const showToast = useToast();
   const location = useLocation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -1413,8 +1415,8 @@ export default function CommercialEstimation() {
           </button>
         </div>
         <div className="right-actions">
-          <button className="btn-outline" onClick={() => alert('Excel sheet successfully exported!')}>Export Excel</button>
-          <button className="btn-outline" onClick={() => alert('Proposal documents generated!')}>Generate Proposal</button>
+          <button className="btn-outline" onClick={() => showToast('Excel sheet successfully exported!', 'success')}>Export Excel</button>
+          <button className="btn-outline" onClick={() => showToast('Proposal documents generated!', 'success')}>Generate Proposal</button>
           <button 
             className="btn-success-green" 
             disabled={saving} 

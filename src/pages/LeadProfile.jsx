@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Upload, X } from 'lucide-react';
 import { fetchLeadActivities, createActivity, completeActivity } from '../services/leadService';
+import { useToast } from '../context/FeedbackContext';
 
 // Country codes with flags (emoji flags work universally)
 const COUNTRY_CODES = [
@@ -134,13 +135,13 @@ function countWords(text) {
 }
 
 /**
- * Validates requestDetails according to 50-200 words business rules.
+ * Validates requestDetails according to 10-200 words business rules.
  */
 function validateRequestDetails(value) {
   const words = countWords(value);
-  if (words === 0) return 'Request details must contain at least 50 words.';
-  if (words < 50) return 'Request details must contain at least 50 words.';
-  if (words > 200) return 'Request details cannot exceed 200 words.';
+  if (words < 10 || words > 200) {
+    return 'Request details must be between 10 and 200 words.';
+  }
   return '';
 }
 
@@ -248,6 +249,7 @@ function PhoneInput({ label, required, value, onChange, countryCode, onCountryCo
 }
 
 export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersList = [], stagesList = [] }) {
+  const showToast = useToast();
   const isExistingLead = !!lead;
   const [isEditMode] = useState(isEditing || !isExistingLead);
   const fileInputRef = useRef(null);
@@ -495,11 +497,12 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
             iconBg: 'var(--color-primary)'
           }));
           setActivities(fetchedActs);
+          showToast('Activity logged successfully', 'success');
         }
       }
     } catch (err) {
       console.error('Failed to log activity:', err);
-      alert(err.message || 'Failed to log activity.');
+      showToast(err.message || 'Failed to log activity.', 'error');
     } finally {
       setIsActivityModalOpen(false);
     }
@@ -714,17 +717,17 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
                     style={{ 
                       fontSize: '11px',
                       fontWeight: '500',
-                      color: (currentWordCount < 50 || currentWordCount > 200) ? 'var(--color-text-muted)' : '#10b981'
+                      color: (currentWordCount < 10 || currentWordCount > 200) ? 'var(--color-text-muted)' : '#10b981'
                     }}
                   >
-                    {currentWordCount} / 200 words
+                    {currentWordCount} / 200 words {currentWordCount < 10 && <span>(at least 10 words required)</span>}
                   </span>
                 </div>
                 <textarea
                   value={requestDetails}
                   onChange={handleRequestDetailsChange}
                   onBlur={handleRequestDetailsBlur}
-                  placeholder="Provide between 50 to 200 words describing the client request..."
+                  placeholder="Provide between 10 to 200 words describing the client request..."
                   style={{ 
                     minHeight: '80px', 
                     resize: 'vertical',
@@ -1276,10 +1279,11 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
                                       iconBg: 'var(--color-primary)'
                                     }));
                                     setActivities(fetchedActs);
+                                    showToast('Activity marked as completed', 'success');
                                   }
                                 } catch (err) {
                                   console.error('Failed to complete activity:', err);
-                                  alert(err.message || 'Failed to complete activity.');
+                                  showToast(err.message || 'Failed to complete activity.', 'error');
                                 }
                               }
                             }}

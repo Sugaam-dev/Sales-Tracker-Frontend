@@ -2,8 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import { UploadCloud, FileSpreadsheet, Download, CheckCircle2, X } from 'lucide-react';
 import './Import.css';
 import { bulkCreateLeads, fetchCurrentUsers } from '../services/leadService';
+import { useToast } from '../context/FeedbackContext';
 
 export default function Import() {
+  const showToast = useToast();
   const [isDragging, setIsDragging] = useState(false);
   const [file, setFile] = useState(null);
   const [isImporting, setIsImporting] = useState(false);
@@ -241,7 +243,7 @@ export default function Import() {
         fileInputRef.current.value = '';
       }
     } else {
-      alert('Please upload a valid CSV file.');
+      showToast('Please upload a valid CSV file.', 'warning');
     }
   };
 

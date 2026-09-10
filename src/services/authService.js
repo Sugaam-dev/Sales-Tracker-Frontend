@@ -101,6 +101,8 @@ export function deriveUser(user) {
     role: displayRole,
     initials: derivedInitials || 'U',
     email: user.email,
+    mobile: user.mobile || user.phone || null,
+    is_active: user.is_active !== undefined ? user.is_active : true,
     permissions: user.permissions || [],
     manager_id: user.manager_id || null,
     manager_name: user.manager_name || null,

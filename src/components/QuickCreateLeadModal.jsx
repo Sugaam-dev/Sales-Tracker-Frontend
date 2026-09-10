@@ -119,9 +119,9 @@ function validateField(name, value, allData) {
       return '';
     case 'requestDetails': {
       const words = countWords(value);
-      if (words === 0) return 'Request details must contain at least 50 words.';
-      if (words < 50) return 'Request details must contain at least 50 words.';
-      if (words > 200) return 'Request details cannot exceed 200 words.';
+      if (words < 10 || words > 200) {
+        return 'Request details must be between 10 and 200 words.';
+      }
       return '';
     }
     case 'owner':
@@ -452,10 +452,10 @@ export default function QuickCreateLeadModal({
                 <span 
                   className="word-counter"
                   style={{ 
-                    color: (currentWordCount < 50 || currentWordCount > 200) ? 'var(--color-text-muted)' : '#10b981'
+                    color: (currentWordCount < 10 || currentWordCount > 200) ? 'var(--color-text-muted)' : '#10b981'
                   }}
                 >
-                  {currentWordCount} / 200 words
+                  {currentWordCount} / 200 words {currentWordCount < 10 && <span style={{ fontSize: '10px' }}>(at least 10 words required)</span>}
                 </span>
               </div>
               <textarea
@@ -464,7 +464,7 @@ export default function QuickCreateLeadModal({
                 onChange={e => handleChange('requestDetails', e.target.value)}
                 onBlur={() => handleBlur('requestDetails')}
                 className={errors.requestDetails ? 'input-error' : ''}
-                placeholder="Provide between 50 to 200 words describing the client request..."
+                placeholder="Provide between 10 to 200 words describing the client request..."
               />
               {errors.requestDetails && <span className="field-error-text">{errors.requestDetails}</span>}
             </div>

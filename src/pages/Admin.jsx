@@ -9,6 +9,7 @@ import {
   revokeLeaderDelegation,
   hasPermission,
 } from '../services/authService';
+import { useToast, useConfirm } from '../context/FeedbackContext';
 import './Admin.css';
 
 // ─── Reusable UI Components ──────────────────────────────────────────────────
@@ -52,6 +53,8 @@ const FormInput = ({ label, name, type = "text", defaultValue, required, min, ma
 // ─── Main Admin Component ─────────────────────────────────────────────────────
 
 export default function Admin({ user: propUser }) {
+  const showToast = useToast();
+  const confirm = useConfirm();
   const currentUser = propUser || JSON.parse(localStorage.getItem('user'));
   const userRole = (currentUser?.rawRole || currentUser?.role || '').toLowerCase();
   const isAdmin = userRole === 'admin';
@@ -71,7 +74,6 @@ export default function Admin({ user: propUser }) {
   }
 
   const [activeTab, setActiveTab] = useState(tabs[0]?.id || 'users');
-  const [toast, setToast] = useState(null);
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [modalRole, setModalRole] = useState('sales_executive');
   const [editingUser, setEditingUser] = useState(null);
@@ -90,11 +92,6 @@ export default function Admin({ user: propUser }) {
   const [userCreationError, setUserCreationError] = useState('');
   const [userCreationSuccess, setUserCreationSuccess] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-
-  const showToast = (message, type = 'default') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3500);
-  };
 
   const loadUsers = async () => {
     if (!canViewUsers) return;
@@ -131,8 +128,19 @@ export default function Admin({ user: propUser }) {
 
   const toggleUser = async (user) => {
     if (!canDeleteUser) return;
+    const newStatus = user.is_active === false ? true : false;
+    const actionLabel = newStatus ? 'activate' : 'deactivate';
+
+    const confirmed = await confirm({
+      title: `${newStatus ? 'Activate' : 'Deactivate'} User?`,
+      message: `Are you sure you want to ${actionLabel} ${user.name || user.email}?`,
+      confirmText: newStatus ? 'Activate' : 'Deactivate',
+      cancelText: 'Cancel',
+      variant: newStatus ? 'primary' : 'danger',
+    });
+    if (!confirmed) return;
+
     try {
-      const newStatus = user.is_active === false ? true : false;
       await updateUser(user.id, {
         name: user.name,
         email: user.email,
@@ -141,10 +149,10 @@ export default function Admin({ user: propUser }) {
         manager_id: user.manager_id || null,
       });
       setUsers(users.map(u => u.id === user.id ? { ...u, is_active: newStatus } : u));
-      showToast(`User status set to ${newStatus ? 'active' : 'inactive'}`);
+      showToast('User status updated successfully', 'success');
     } catch (err) {
       console.error('Failed to toggle user status:', err);
-      showToast(err.message || 'Failed to toggle status');
+      showToast(err.message || 'Failed to toggle status', 'error');
     }
   };
 
@@ -700,12 +708,6 @@ export default function Admin({ user: propUser }) {
             </div>
           </div>
         </ModalWrapper>
-      )}
-
-      {toast && (
-        <div className={`toast ${toast.type && toast.type !== 'default' ? `toast-${toast.type}` : ''}`}>
-          {toast.message}
-        </div>
       )}
     </div>
   );
