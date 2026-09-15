@@ -79,6 +79,7 @@ export default function Admin({ user: propUser }) {
   const [editingUser, setEditingUser] = useState(null);
   const [delegationModalLeader, setDelegationModalLeader] = useState(null);
   const [delegationLoading, setDelegationLoading] = useState(false);
+  const [togglingUserId, setTogglingUserId] = useState(null);
 
   const [users, setUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
@@ -127,7 +128,7 @@ export default function Admin({ user: propUser }) {
   }, [canViewUsers]);
 
   const toggleUser = async (user) => {
-    if (!canDeleteUser) return;
+    if (!canDeleteUser || togglingUserId) return;
     const newStatus = user.is_active === false ? true : false;
     const actionLabel = newStatus ? 'activate' : 'deactivate';
 
@@ -140,19 +141,33 @@ export default function Admin({ user: propUser }) {
     });
     if (!confirmed) return;
 
+    setTogglingUserId(user.id);
     try {
-      await updateUser(user.id, {
+      const updatedUser = await updateUser(user.id, {
         name: user.name,
         email: user.email,
         role: user.role,
         is_active: newStatus,
         manager_id: user.manager_id || null,
       });
-      setUsers(users.map(u => u.id === user.id ? { ...u, is_active: newStatus } : u));
+      setUsers((prevUsers) =>
+        prevUsers.map((u) => {
+          if (u.id === user.id) {
+            return {
+              ...u,
+              ...(updatedUser && typeof updatedUser === 'object' ? updatedUser : {}),
+              is_active: updatedUser?.is_active !== undefined ? updatedUser.is_active : newStatus,
+            };
+          }
+          return u;
+        })
+      );
       showToast('User status updated successfully', 'success');
     } catch (err) {
       console.error('Failed to toggle user status:', err);
       showToast(err.message || 'Failed to toggle status', 'error');
+    } finally {
+      setTogglingUserId(null);
     }
   };
 
@@ -333,7 +348,7 @@ export default function Admin({ user: propUser }) {
     }
   };
 
-  const activeSalesManagers = users.filter(u => (u.role || '').toLowerCase() === 'sales_manager' && u.is_active !== false);
+  const activeSalesManagers = users.filter(u => (u.role || '').toLowerCase() === 'sales_manager' && Boolean(u.is_active));
 
   const DELEGABLE_PERMISSIONS = [
     { key: 'user.view', label: 'View Users', desc: 'Can view team members list and details' },
@@ -396,7 +411,8 @@ export default function Admin({ user: propUser }) {
                     {users.map(u => {
                       const isExecutive = (u.role || '').toLowerCase() === 'sales_executive';
                       const isLeader = (u.role || '').toLowerCase() === 'leader';
-                      const isActive = u.is_active !== false;
+                      const isActive = Boolean(u.is_active);
+                      const isToggling = togglingUserId === u.id;
 
                       return (
                         <tr key={u.id}>
@@ -415,12 +431,15 @@ export default function Admin({ user: propUser }) {
                             )}
                           </td>
                           <td>
-                            <label className="toggle-switch">
+                            <label
+                              className="toggle-switch"
+                              style={isToggling ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}
+                            >
                               <input
                                 type="checkbox"
                                 checked={isActive}
                                 onChange={() => toggleUser(u)}
-                                disabled={!canDeleteUser}
+                                disabled={!canDeleteUser || isToggling}
                               />
                               <span className="slider"></span>
                             </label>
