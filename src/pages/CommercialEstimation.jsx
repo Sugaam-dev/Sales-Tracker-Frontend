@@ -9,7 +9,16 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, Legend,
   LineChart, Line
 } from 'recharts';
-import { fetchCommercial, updateCommercial, fetchCommercialAnalytics } from '../services/commercialService';
+import { 
+  fetchCommercial, 
+  updateCommercial, 
+  fetchCommercialAnalytics,
+  CURRENCY_RATES,
+  CURRENCY_SYMBOLS,
+  BASE_GRADE_DAILY_COSTS_USD,
+  convertFromUSD,
+  convertToUSD
+} from '../services/commercialService';
 import { useToast } from '../context/FeedbackContext';
 import './CommercialEstimation.css';
 
@@ -66,20 +75,6 @@ const DEFAULT_SDLC_PHASES = [
   { phase: 'Warranty', weight: 3 }
 ];
 
-const BASE_GRADE_DAILY_COSTS_USD = {
-  L1: 180,
-  L2: 220,
-  L3: 380,
-  L4: 520
-};
-
-const CURRENCY_RATES = {
-  USD: 1.00,
-  EUR: 0.92,
-  GBP: 0.79,
-  INR: 83.50
-};
-
 export default function CommercialEstimation() {
   const showToast = useToast();
   const location = useLocation();
@@ -124,6 +119,7 @@ export default function CommercialEstimation() {
     discount: 0,
     markup: 0,
     manualSellingPrice: 0,
+    baseManualSellingPriceUSD: 0,
     useManualPrice: false
   });
 
@@ -131,6 +127,10 @@ export default function CommercialEstimation() {
   const [phases, setPhases] = useState(
     DEFAULT_SDLC_PHASES.map((p, idx) => ({ id: idx + 1, phase: p.phase, manDays: 0, percentage: p.weight }))
   );
+
+  // Authoritative Backend Financial Summary
+  const [financialSummary, setFinancialSummary] = useState(null);
+
 
   // 6. Real-time Reactive Derived Totals & Financials
   const totals = useMemo(() => {
@@ -153,56 +153,101 @@ export default function CommercialEstimation() {
     });
 
     const totalManDays = onsiteDays + offshoreDays;
-    const expenseCost = expenses.reduce((sum, e) => sum + (Number(e.cost) || 0), 0);
-    const totalCost = resourceCost + expenseCost;
+    const totalExpenses = expenses.reduce((sum, e) => sum + (Number(e.cost) || 0), 0);
+    const totalResourceCost = Math.round(resourceCost * 100) / 100;
+    const totalResourceRevenue = Math.round(resourceRevenue * 100) / 100;
+    const totalProjectCost = Math.round((totalResourceCost + totalExpenses) * 100) / 100;
 
-    const sellingPrice = (scenario.useManualPrice && Number(scenario.manualSellingPrice) > 0)
+    // Backend Formula:
+    // Final Resource Revenue = Total Resource Revenue * (1 + Markup%/100 - Discount%/100)
+    const markupPct = Number(scenario.markup) || 0;
+    const discountPct = Number(scenario.discount) || 0;
+    const multiplier = 1.0 + (markupPct / 100.0) - (discountPct / 100.0);
+    const finalResourceRevenue = Math.round((totalResourceRevenue * multiplier) * 100) / 100;
+
+    // Calculated Selling Price = Final Resource Revenue + Total Expenses
+    const calculatedSellingPrice = Math.round((finalResourceRevenue + totalExpenses) * 100) / 100;
+
+    // Effective Selling Price
+    const effectiveSellingPrice = (scenario.useManualPrice && Number(scenario.manualSellingPrice) > 0)
       ? Number(scenario.manualSellingPrice)
-      : (totalCost * (1 + (Number(scenario.markup) || 0) / 100)) * (1 - (Number(scenario.discount) || 0) / 100);
+      : calculatedSellingPrice;
 
-    const grossProfit = sellingPrice - totalCost;
-    const margin = sellingPrice > 0 ? (grossProfit / sellingPrice) * 100 : 0;
-    const roi = totalCost > 0 ? (grossProfit / totalCost) * 100 : 0;
+    const grossProfit = Math.round((effectiveSellingPrice - totalProjectCost) * 100) / 100;
+    const marginPercent = effectiveSellingPrice > 0 ? (grossProfit / effectiveSellingPrice) * 100 : 0;
+    const roiPercent = totalProjectCost > 0 ? (grossProfit / totalProjectCost) * 100 : 0;
 
-    const duration = Number(projectInfo.duration) || 1;
-    const monthlyRevenue = sellingPrice / duration;
-    const monthlyCost = totalCost / duration;
+    const duration = Math.max(1, Number(projectInfo.duration) || 1);
+    const monthlyRevenue = effectiveSellingPrice / duration;
+    const monthlyCost = totalProjectCost / duration;
     const netMonthly = monthlyRevenue - monthlyCost;
-    const breakeven = netMonthly > 0 ? Math.min(duration, Math.max(1, Math.round(totalCost / monthlyRevenue))) : duration;
-    const maxCashOut = totalCost * 0.35;
 
-    const monthlyRate = 0.10 / 12;
+    // Annual discount rate 10%, monthly compound discount rate
+    const annualDiscountRate = 0.10;
+    const monthlyDiscountRate = Math.pow(1.0 + annualDiscountRate, 1.0 / 12.0) - 1.0;
+
+    let breakEvenMonth = null;
+    let maxCashOut = 0;
     let npv = 0;
+    let cumCost = 0;
+    let cumRevenue = 0;
+
     for (let m = 1; m <= duration; m++) {
-      npv += netMonthly / Math.pow(1 + monthlyRate, m);
+      cumCost += monthlyCost;
+      cumRevenue += monthlyRevenue;
+      const cumCashPos = cumRevenue - cumCost;
+
+      if (breakEvenMonth === null && cumRevenue >= cumCost) {
+        breakEvenMonth = m;
+      }
+
+      if (cumCashPos < 0) {
+        const deficit = -cumCashPos;
+        if (deficit > maxCashOut) {
+          maxCashOut = deficit;
+        }
+      }
+
+      const discountFactor = Math.pow(1.0 + monthlyDiscountRate, m);
+      npv += netMonthly / discountFactor;
     }
 
     return {
       onsiteDays,
       offshoreDays,
       totalManDays,
-      resourceCost,
-      resourceRevenue,
-      expenseCost,
-      totalCost,
-      baseRevenue: sellingPrice,
-      sellingPrice,
-      grossProfit,
-      margin,
-      roi,
-      npv,
-      breakeven,
-      maxCashOut
+      totalResourceCost: financialSummary?.totalResourceCost ?? totalResourceCost,
+      totalResourceRevenue: financialSummary?.totalResourceRevenue ?? totalResourceRevenue,
+      totalExpenses: financialSummary?.totalExpenses ?? totalExpenses,
+      totalProjectCost: financialSummary?.totalProjectCost ?? totalProjectCost,
+      calculatedSellingPrice: financialSummary?.calculatedSellingPrice ?? calculatedSellingPrice,
+      effectiveSellingPrice: financialSummary?.effectiveSellingPrice ?? effectiveSellingPrice,
+      grossProfit: financialSummary?.grossProfit ?? grossProfit,
+      marginPercent: financialSummary?.marginPercent ?? marginPercent,
+      roiPercent: financialSummary?.roiPercent ?? roiPercent,
+      breakEvenMonth: financialSummary?.breakEvenMonth ?? (breakEvenMonth || duration),
+      maximumCashOut: financialSummary?.maximumCashOut ?? maxCashOut,
+      npv: financialSummary?.npv ?? npv,
+
+      // Aliases for compatibility
+      resourceCost: financialSummary?.totalResourceCost ?? totalResourceCost,
+      resourceRevenue: financialSummary?.totalResourceRevenue ?? totalResourceRevenue,
+      expenseCost: financialSummary?.totalExpenses ?? totalExpenses,
+      totalCost: financialSummary?.totalProjectCost ?? totalProjectCost,
+      sellingPrice: financialSummary?.effectiveSellingPrice ?? effectiveSellingPrice,
+      margin: financialSummary?.marginPercent ?? marginPercent,
+      roi: financialSummary?.roiPercent ?? roiPercent,
+      breakeven: financialSummary?.breakEvenMonth ?? (breakEvenMonth || duration),
+      maxCashOut: financialSummary?.maximumCashOut ?? maxCashOut,
     };
-  }, [resources, expenses, scenario, projectInfo.duration]);
+  }, [resources, expenses, scenario, projectInfo.duration, financialSummary]);
 
   // 7. Backend Analytics Data
   const [analyticsData, setAnalyticsData] = useState(null);
 
   const getGradeDailyCost = useCallback((grade, currency = 'USD') => {
-    const base = BASE_GRADE_DAILY_COSTS_USD[grade] || BASE_GRADE_DAILY_COSTS_USD.L1;
-    const rate = CURRENCY_RATES[currency] || 1.00;
-    return Math.round(base * rate * 100) / 100;
+    const baseUSD = BASE_GRADE_DAILY_COSTS_USD[grade] || BASE_GRADE_DAILY_COSTS_USD.L1;
+    return convertFromUSD(baseUSD, currency);
   }, []);
 
   // Helper to sync state from backend GetCommercialResponse
@@ -226,53 +271,116 @@ export default function CommercialEstimation() {
       status: comm.status || 'DRAFT'
     }));
 
-    // Resources with role dropdown & custom role mapping
+    // Resources with role dropdown & custom role mapping and canonical base USD tracking
     if (Array.isArray(comm.resources) && comm.resources.length > 0) {
       setResources(comm.resources.map((r, i) => {
         const { selectedRole, customRole } = getRoleDropdownState(r.role);
+        const baseDailyCostUSD = (r.dailyCost !== undefined && r.dailyCost !== null)
+          ? convertToUSD(r.dailyCost, activeCurrency)
+          : (BASE_GRADE_DAILY_COSTS_USD[r.grade || 'L1'] || 180);
+        const baseBillingRateUSD = (r.billingRate !== undefined && r.billingRate !== null)
+          ? convertToUSD(r.billingRate, activeCurrency)
+          : 0;
         return {
           id: r.id || `res-${i + 1}`,
           role: r.role || '',
           selectedRole,
           customRole,
           grade: r.grade || 'L1',
-          onsiteDays: r.onsiteDays || 0,
-          offshoreDays: r.offshoreDays || 0,
-          dailyCost: r.dailyCost || getGradeDailyCost(r.grade || 'L1', activeCurrency),
-          billingRate: r.billingRate || 0
+          onsiteDays: r.onsiteDays !== undefined && r.onsiteDays !== null ? r.onsiteDays : 0,
+          offshoreDays: r.offshoreDays !== undefined && r.offshoreDays !== null ? r.offshoreDays : 0,
+          dailyCost: r.dailyCost !== undefined && r.dailyCost !== null ? r.dailyCost : convertFromUSD(baseDailyCostUSD, activeCurrency),
+          billingRate: r.billingRate !== undefined && r.billingRate !== null ? r.billingRate : convertFromUSD(baseBillingRateUSD, activeCurrency),
+          baseDailyCostUSD,
+          baseBillingRateUSD
         };
       }));
     } else {
       setResources([
-        { id: 'res-1', role: 'Senior Fullstack Developer', selectedRole: 'Senior Fullstack Developer', customRole: '', grade: 'L3', onsiteDays: 20, offshoreDays: 40, dailyCost: getGradeDailyCost('L3', activeCurrency), billingRate: 650 },
-        { id: 'res-2', role: 'Junior / Mid Fullstack Developer', selectedRole: 'Junior / Mid Fullstack Developer', customRole: '', grade: 'L1', onsiteDays: 10, offshoreDays: 120, dailyCost: getGradeDailyCost('L1', activeCurrency), billingRate: 300 }
+        { 
+          id: 'res-1', 
+          role: 'Senior Fullstack Developer', 
+          selectedRole: 'Senior Fullstack Developer', 
+          customRole: '', 
+          grade: 'L3', 
+          onsiteDays: 20, 
+          offshoreDays: 40, 
+          dailyCost: convertFromUSD(380, activeCurrency), 
+          billingRate: convertFromUSD(650, activeCurrency),
+          baseDailyCostUSD: 380,
+          baseBillingRateUSD: 650
+        },
+        { 
+          id: 'res-2', 
+          role: 'Junior / Mid Fullstack Developer', 
+          selectedRole: 'Junior / Mid Fullstack Developer', 
+          customRole: '', 
+          grade: 'L1', 
+          onsiteDays: 10, 
+          offshoreDays: 120, 
+          dailyCost: convertFromUSD(180, activeCurrency), 
+          billingRate: convertFromUSD(300, activeCurrency),
+          baseDailyCostUSD: 180,
+          baseBillingRateUSD: 300
+        }
       ]);
     }
 
-    // Expenses with safe string IDs
+    // Expenses with safe string IDs and canonical base USD tracking
     if (Array.isArray(comm.expenses) && comm.expenses.length > 0) {
-      setExpenses(comm.expenses.map((e, i) => ({
-        id: e.id || `exp-${i + 1}`,
-        type: e.expenseType || 'Miscellaneous',
-        expenseType: e.expenseType || 'Miscellaneous',
-        cost: e.cost !== undefined && e.cost !== null ? e.cost : 0,
-        remarks: e.remarks || ''
-      })));
+      setExpenses(comm.expenses.map((e, i) => {
+        const baseCostUSD = (e.cost !== undefined && e.cost !== null)
+          ? convertToUSD(e.cost, activeCurrency)
+          : 0;
+        return {
+          id: e.id || `exp-${i + 1}`,
+          type: e.expenseType || 'Miscellaneous',
+          expenseType: e.expenseType || 'Miscellaneous',
+          cost: e.cost !== undefined && e.cost !== null ? e.cost : 0,
+          baseCostUSD,
+          remarks: e.remarks || ''
+        };
+      }));
     } else {
       setExpenses([
-        { id: 'exp-1', type: 'Travel', expenseType: 'Travel', cost: 1500, remarks: 'Client site visits' },
-        { id: 'exp-2', type: 'Cloud Hosting', expenseType: 'Cloud Hosting', cost: 800, remarks: 'Infrastructure' }
+        { 
+          id: 'exp-1', 
+          type: 'Travel', 
+          expenseType: 'Travel', 
+          cost: convertFromUSD(1500, activeCurrency), 
+          baseCostUSD: 1500, 
+          remarks: 'Client site visits' 
+        },
+        { 
+          id: 'exp-2', 
+          type: 'Cloud Hosting', 
+          expenseType: 'Cloud Hosting', 
+          cost: convertFromUSD(800, activeCurrency), 
+          baseCostUSD: 800, 
+          remarks: 'Infrastructure' 
+        }
       ]);
     }
 
     // Scenario
+    const baseManualSellingPriceUSD = (comm.manualSellingPrice || 0)
+      ? convertToUSD(comm.manualSellingPrice, activeCurrency)
+      : 0;
     setScenario(prev => ({
       ...prev,
       markup: comm.markupPercent !== undefined ? comm.markupPercent : prev.markup,
       discount: comm.discountPercent !== undefined ? comm.discountPercent : prev.discount,
       manualSellingPrice: comm.manualSellingPrice || 0,
+      baseManualSellingPriceUSD,
       useManualPrice: Boolean(comm.manualSellingPrice && comm.manualSellingPrice > 0)
     }));
+
+    // Financial Summary from Backend
+    if (comm.financialSummary) {
+      setFinancialSummary(comm.financialSummary);
+    } else {
+      setFinancialSummary(null);
+    }
 
     // SDLC Allocations
     if (Array.isArray(comm.sdlcAllocations) && comm.sdlcAllocations.length > 0) {
@@ -294,7 +402,7 @@ export default function CommercialEstimation() {
     if (analytics) {
       setAnalyticsData(analytics);
     }
-  }, [leadId, leadFromState, getGradeDailyCost]);
+  }, [leadId, leadFromState]);
 
   // Load commercial estimation on mount
   const loadData = useCallback(async (currency = '') => {
@@ -386,6 +494,71 @@ export default function CommercialEstimation() {
     const previousField = lastProjectInfoField.current;
     lastProjectInfoField.current = field;
 
+    if (field === 'duration' || field === 'startDate' || field === 'endDate') {
+      setFinancialSummary(null);
+    }
+
+    if (field === 'currency') {
+      const oldCurrency = projectInfo.currency === 'select' ? 'USD' : projectInfo.currency;
+      const newCurrency = val && val !== 'select' ? val : 'USD';
+
+      if (newCurrency !== oldCurrency) {
+        // Synchronously convert all local state to the new currency using canonical USD base (no double conversion, zero drift)
+        setResources(prev => prev.map(r => {
+          const baseDaily = (r.baseDailyCostUSD !== undefined && r.baseDailyCostUSD !== null)
+            ? r.baseDailyCostUSD
+            : convertToUSD(r.dailyCost, oldCurrency);
+          const baseBilling = (r.baseBillingRateUSD !== undefined && r.baseBillingRateUSD !== null)
+            ? r.baseBillingRateUSD
+            : convertToUSD(r.billingRate, oldCurrency);
+          return {
+            ...r,
+            baseDailyCostUSD: baseDaily,
+            baseBillingRateUSD: baseBilling,
+            dailyCost: convertFromUSD(baseDaily, newCurrency),
+            billingRate: convertFromUSD(baseBilling, newCurrency),
+          };
+        }));
+
+        setExpenses(prev => prev.map(e => {
+          const baseCost = (e.baseCostUSD !== undefined && e.baseCostUSD !== null)
+            ? e.baseCostUSD
+            : convertToUSD(e.cost, oldCurrency);
+          const costVal = (e.cost !== '' && e.cost !== null && e.cost !== undefined)
+            ? convertFromUSD(baseCost, newCurrency)
+            : '';
+          return {
+            ...e,
+            baseCostUSD: baseCost,
+            cost: costVal,
+          };
+        }));
+
+        setScenario(prev => {
+          const baseManual = (prev.baseManualSellingPriceUSD !== undefined && prev.baseManualSellingPriceUSD !== null)
+            ? prev.baseManualSellingPriceUSD
+            : convertToUSD(prev.manualSellingPrice, oldCurrency);
+          return {
+            ...prev,
+            baseManualSellingPriceUSD: baseManual,
+            manualSellingPrice: prev.manualSellingPrice ? convertFromUSD(baseManual, newCurrency) : 0,
+          };
+        });
+
+        // Invalidate backend financial summary so live totals immediately evaluate in new currency
+        setFinancialSummary(null);
+
+        // Fetch fresh backend analytics for the new currency in background
+        fetchCommercialAnalytics(leadId, newCurrency)
+          .then(res => {
+            if (res?.data) {
+              setAnalyticsData(res.data);
+            }
+          })
+          .catch(() => {});
+      }
+    }
+
     setProjectInfo(prev => {
       const updated = { ...prev, [field]: val };
       const parsedStart = parseDate(updated.startDate);
@@ -430,14 +603,13 @@ export default function CommercialEstimation() {
 
       return updated;
     });
-
-    if (field === 'currency' && val && val !== 'select') {
-      loadData(val);
-    }
   };
 
   // Resource Actions
   const handleResourceChange = (id, field, val) => {
+    setFinancialSummary(null);
+    const activeCurrency = projectInfo.currency === 'select' ? 'USD' : projectInfo.currency;
+
     setResources(prev => prev.map(r => {
       if (r.id === id) {
         if (field === 'selectedRole') {
@@ -458,17 +630,30 @@ export default function CommercialEstimation() {
           };
         }
 
-        if (field === 'onsiteDays' || field === 'offshoreDays' || field === 'billingRate') {
+        if (field === 'onsiteDays' || field === 'offshoreDays') {
           const cleanVal = val.replace(/\D/g, '');
           return { ...r, [field]: cleanVal };
         }
 
+        if (field === 'billingRate') {
+          const cleanVal = val.replace(/[^0-9.]/g, '');
+          const baseUSD = convertToUSD(cleanVal, activeCurrency);
+          return { 
+            ...r, 
+            billingRate: cleanVal,
+            baseBillingRateUSD: baseUSD
+          };
+        }
+
         if (field === 'grade') {
           const updatedGrade = val;
+          const baseDailyCostUSD = BASE_GRADE_DAILY_COSTS_USD[updatedGrade] || BASE_GRADE_DAILY_COSTS_USD.L1;
+          const convertedDailyCost = convertFromUSD(baseDailyCostUSD, activeCurrency);
           return {
             ...r,
             grade: updatedGrade,
-            dailyCost: getGradeDailyCost(updatedGrade, projectInfo.currency)
+            dailyCost: convertedDailyCost,
+            baseDailyCostUSD: baseDailyCostUSD
           };
         }
 
@@ -483,6 +668,10 @@ export default function CommercialEstimation() {
   };
 
   const handleAddResource = () => {
+    setFinancialSummary(null);
+    const activeCurrency = projectInfo.currency === 'select' ? 'USD' : projectInfo.currency;
+    const baseDailyCostUSD = BASE_GRADE_DAILY_COSTS_USD.L1;
+    const baseBillingRateUSD = 250;
     const nextId = `res-temp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     setResources(prev => [
       ...prev,
@@ -494,8 +683,10 @@ export default function CommercialEstimation() {
         grade: 'L1', 
         onsiteDays: 0, 
         offshoreDays: 80, 
-        dailyCost: getGradeDailyCost('L1', projectInfo.currency), 
-        billingRate: 250,
+        dailyCost: convertFromUSD(baseDailyCostUSD, activeCurrency), 
+        billingRate: convertFromUSD(baseBillingRateUSD, activeCurrency),
+        baseDailyCostUSD,
+        baseBillingRateUSD,
         totalDays: 80,
         totalCost: 0,
         totalRevenue: 0
@@ -504,16 +695,25 @@ export default function CommercialEstimation() {
   };
 
   const handleRemoveResource = (id) => {
+    setFinancialSummary(null);
     setResources(prev => prev.filter(r => r.id !== id));
   };
 
   // Expense Actions
   const handleExpenseChange = (id, field, val) => {
+    setFinancialSummary(null);
+    const activeCurrency = projectInfo.currency === 'select' ? 'USD' : projectInfo.currency;
+
     setExpenses(prev => prev.map(expense => {
       if (expense.id === id) {
         if (field === 'cost') {
-          const cleanVal = val.replace(/\D/g, '');
-          return { ...expense, cost: cleanVal };
+          const cleanVal = val.replace(/[^0-9.]/g, '');
+          const baseUSD = convertToUSD(cleanVal, activeCurrency);
+          return { 
+            ...expense, 
+            cost: cleanVal,
+            baseCostUSD: baseUSD
+          };
         }
         if (field === 'expenseType' || field === 'type') {
           return { ...expense, expenseType: val, type: val };
@@ -528,19 +728,30 @@ export default function CommercialEstimation() {
   };
 
   const handleAddExpense = () => {
+    setFinancialSummary(null);
     const nextId = `exp-temp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     setExpenses(prev => [
       ...prev,
-      { id: nextId, type: 'Travel', expenseType: 'Travel', customType: '', cost: '', remarks: '' }
+      { 
+        id: nextId, 
+        type: 'Travel', 
+        expenseType: 'Travel', 
+        customType: '', 
+        cost: '', 
+        baseCostUSD: 0, 
+        remarks: '' 
+      }
     ]);
   };
 
   const handleRemoveExpense = (id) => {
+    setFinancialSummary(null);
     setExpenses(prev => prev.filter(e => e.id !== id));
   };
 
   // Scenario Updates
   const handleScenarioSlider = (field, val) => {
+    setFinancialSummary(null);
     setScenario(prev => ({
       ...prev,
       [field]: Number(val),
@@ -549,10 +760,15 @@ export default function CommercialEstimation() {
   };
 
   const handleManualPriceChange = (val) => {
-    const cleanPrice = val.replace(/\D/g, '');
+    setFinancialSummary(null);
+    const activeCurrency = projectInfo.currency === 'select' ? 'USD' : projectInfo.currency;
+    const cleanPrice = val.replace(/[^0-9.]/g, '');
+    const numPrice = Number(cleanPrice) || 0;
+    const baseUSD = convertToUSD(numPrice, activeCurrency);
     setScenario(prev => ({
       ...prev,
-      manualSellingPrice: Number(cleanPrice),
+      manualSellingPrice: numPrice,
+      baseManualSellingPriceUSD: baseUSD,
       useManualPrice: true
     }));
   };
@@ -715,6 +931,92 @@ export default function CommercialEstimation() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleExportExcel = () => {
+    const activeCurrency = projectInfo.currency === 'select' ? 'USD' : projectInfo.currency;
+    let csv = `Commercial Estimation - ${leadId}\n`;
+    csv += `Proposal ID,${projectInfo.proposalId}\n`;
+    csv += `Client,${projectInfo.clientName || projectInfo.leadName}\n`;
+    csv += `Project,${projectInfo.projectName}\n`;
+    csv += `Currency,${activeCurrency}\n`;
+    csv += `Duration,${projectInfo.duration} months\n\n`;
+
+    csv += `Resources (${activeCurrency})\n`;
+    csv += `Role,Grade,Onsite Days,Offshore Days,Total Days,Daily Cost,Billing Rate,Total Cost,Total Revenue\n`;
+    resources.forEach(r => {
+      const days = (Number(r.onsiteDays) || 0) + (Number(r.offshoreDays) || 0);
+      const cost = days * (Number(r.dailyCost) || 0);
+      const rev = days * (Number(r.billingRate) || 0);
+      csv += `"${r.role}","${r.grade}",${r.onsiteDays || 0},${r.offshoreDays || 0},${days},${r.dailyCost},${r.billingRate},${Math.round(cost)},${Math.round(rev)}\n`;
+    });
+    csv += `Totals,,${totals.onsiteDays},${totals.offshoreDays},${totals.totalManDays},,-,${Math.round(totals.resourceCost)},${Math.round(totals.resourceRevenue)}\n\n`;
+
+    csv += `Expenses (${activeCurrency})\n`;
+    csv += `Expense Type,Cost,Remarks\n`;
+    expenses.forEach(e => {
+      csv += `"${e.expenseType || e.type}",${e.cost || 0},"${e.remarks || ''}"\n`;
+    });
+    csv += `Total Expenses,${totals.expenseCost},\n\n`;
+
+    csv += `Financial Summary (${activeCurrency})\n`;
+    csv += `Total Project Cost,${totals.totalProjectCost}\n`;
+    csv += `Total Resource Revenue,${totals.totalResourceRevenue}\n`;
+    csv += `Effective Selling Price,${totals.effectiveSellingPrice}\n`;
+    csv += `Gross Profit,${totals.grossProfit}\n`;
+    csv += `Margin %,${totals.marginPercent.toFixed(2)}%\n`;
+    csv += `ROI %,${totals.roiPercent.toFixed(2)}%\n`;
+    csv += `Break-even Month,Month ${totals.breakEvenMonth}\n`;
+    csv += `Maximum Cash Out,${totals.maximumCashOut}\n`;
+    csv += `NPV,${totals.npv}\n`;
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `Commercial_Estimation_${leadId}_${activeCurrency}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast(`Commercial estimation exported in ${activeCurrency}!`, 'success');
+  };
+
+  const handleGenerateProposal = () => {
+    const activeCurrency = projectInfo.currency === 'select' ? 'USD' : projectInfo.currency;
+    const proposalContent = `# Commercial Proposal: ${projectInfo.projectName}
+**Lead / Proposal ID**: ${projectInfo.proposalId}
+**Client**: ${projectInfo.clientName || projectInfo.leadName}
+**Billing Type**: ${projectInfo.billingType}
+**Currency**: ${activeCurrency}
+**Estimated Duration**: ${projectInfo.duration} Months
+
+---
+### Financial Highlights
+- **Total Project Cost**: ${totals.totalProjectCost.toLocaleString()} ${activeCurrency}
+- **Effective Selling Price**: ${Math.round(totals.effectiveSellingPrice).toLocaleString()} ${activeCurrency}
+- **Gross Profit**: ${Math.round(totals.grossProfit).toLocaleString()} ${activeCurrency}
+- **Project Margin**: ${totals.marginPercent.toFixed(1)}%
+- **Estimated Break-even**: Month ${totals.breakEvenMonth}
+- **NPV**: ${Math.round(totals.npv).toLocaleString()} ${activeCurrency}
+
+---
+### Staffing Summary
+Total Effort: ${totals.totalManDays} Man-days
+Resources:
+${resources.map(r => `- ${r.role} (${r.grade}): ${(Number(r.onsiteDays) || 0) + (Number(r.offshoreDays) || 0)} days @ ${r.billingRate} ${activeCurrency}/day`).join('\n')}
+
+---
+*Generated by Sales Tracker Commercial Engine*
+`;
+    const blob = new Blob([proposalContent], { type: 'text/markdown;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `Proposal_${projectInfo.proposalId}_${activeCurrency}.md`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast(`Proposal generated in ${activeCurrency}!`, 'success');
   };
 
   const COLORS = ['#1D4ED8', '#0EA5E9', '#10B981', '#F59E0B', '#8B5CF6', '#EF4444', '#EC4899', '#64748B'];
@@ -1049,7 +1351,7 @@ export default function CommercialEstimation() {
               <DollarSign size={22} />
             </div>
             <div className="kpi-info-wrapper">
-              <span className="kpi-val">{totals.totalCost.toLocaleString()}</span>
+              <span className="kpi-val">{totals.totalProjectCost.toLocaleString()}</span>
               <span className="kpi-lbl">Total Project Cost</span>
             </div>
           </div>
@@ -1059,8 +1361,8 @@ export default function CommercialEstimation() {
               <TrendingUp size={22} />
             </div>
             <div className="kpi-info-wrapper">
-              <span className="kpi-val">{Math.round(totals.sellingPrice).toLocaleString()}</span>
-              <span className="kpi-lbl">Selling Price</span>
+              <span className="kpi-val">{Math.round(totals.effectiveSellingPrice).toLocaleString()}</span>
+              <span className="kpi-lbl">Effective Selling Price</span>
             </div>
           </div>
 
@@ -1081,8 +1383,8 @@ export default function CommercialEstimation() {
               <Clock size={22} />
             </div>
             <div className="kpi-info-wrapper">
-              <span className="kpi-val" style={{ color: totals.margin >= 30 ? '#10B981' : '#F59E0B' }}>
-                {totals.margin.toFixed(1)}%
+              <span className="kpi-val" style={{ color: totals.marginPercent >= 30 ? '#10B981' : '#F59E0B' }}>
+                {totals.marginPercent.toFixed(1)}%
               </span>
               <span className="kpi-lbl">Margin %</span>
             </div>
@@ -1093,7 +1395,7 @@ export default function CommercialEstimation() {
               <BarChart3 size={22} />
             </div>
             <div className="kpi-info-wrapper">
-              <span className="kpi-val">{totals.roi.toFixed(1)}%</span>
+              <span className="kpi-val">{totals.roiPercent.toFixed(1)}%</span>
               <span className="kpi-lbl">ROI (Return on Investment)</span>
             </div>
           </div>
@@ -1103,7 +1405,7 @@ export default function CommercialEstimation() {
               <Calendar size={22} />
             </div>
             <div className="kpi-info-wrapper">
-              <span className="kpi-val">Month {totals.breakeven}</span>
+              <span className="kpi-val">{totals.breakEvenMonth ? `Month ${totals.breakEvenMonth}` : 'N/A'}</span>
               <span className="kpi-lbl">Break-even Month</span>
             </div>
           </div>
@@ -1113,7 +1415,7 @@ export default function CommercialEstimation() {
               <TrendingUp size={22} />
             </div>
             <div className="kpi-info-wrapper">
-              <span className="kpi-val">{Math.round(totals.maxCashOut).toLocaleString()}</span>
+              <span className="kpi-val">{Math.round(totals.maximumCashOut).toLocaleString()}</span>
               <span className="kpi-lbl">Maximum Cash Out</span>
             </div>
           </div>
@@ -1188,14 +1490,14 @@ export default function CommercialEstimation() {
                 type="text" 
                 value={scenario.useManualPrice ? scenario.manualSellingPrice : ''} 
                 onChange={(e) => handleManualPriceChange(e.target.value)} 
-                placeholder={`Auto calculated: ${Math.round(totals.sellingPrice).toLocaleString()}`}
+                placeholder={`Auto calculated: ${Math.round(totals.calculatedSellingPrice).toLocaleString()}`}
                 style={{ fontSize: '1.125rem', padding: '10px 14px' }}
               />
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#64748B' }}>
               <span>Target Margin Selling Price:</span>
               <strong style={{ color: '#0F172A' }}>
-                {(totals.totalCost / (1 - (scenario.targetMargin / 100))).toLocaleString([], {maximumFractionDigits: 0})}
+                {(totals.totalProjectCost / (1 - (scenario.targetMargin / 100))).toLocaleString([], {maximumFractionDigits: 0})}
               </strong>
             </div>
             {scenario.useManualPrice && (
@@ -1367,19 +1669,29 @@ export default function CommercialEstimation() {
         <div className="summary-metrics-grid">
           <div className="metric-item">
             <span className="metric-lbl">Total Project Cost</span>
-            <span className="metric-val">{totals.totalCost.toLocaleString()}{currencyLabel ? ` ${currencyLabel}` : ''}</span>
+            <span className="metric-val">{totals.totalProjectCost.toLocaleString()}{currencyLabel ? ` ${currencyLabel}` : ''}</span>
           </div>
           <div className="metric-item">
-            <span className="metric-lbl">Total Revenue</span>
-            <span className="metric-val">{Math.round(totals.sellingPrice).toLocaleString()}{currencyLabel ? ` ${currencyLabel}` : ''}</span>
+            <span className="metric-lbl">Total Resource Revenue</span>
+            <span className="metric-val">{Math.round(totals.totalResourceRevenue).toLocaleString()}{currencyLabel ? ` ${currencyLabel}` : ''}</span>
+          </div>
+          <div className="metric-item">
+            <span className="metric-lbl">Effective Selling Price</span>
+            <span className="metric-val">{Math.round(totals.effectiveSellingPrice).toLocaleString()}{currencyLabel ? ` ${currencyLabel}` : ''}</span>
           </div>
           <div className="metric-item">
             <span className="metric-lbl">Profit Margin</span>
-            <span className="metric-val" style={{ color: totals.margin >= 30 ? '#34D399' : '#FBBF24' }}>
-              {totals.margin.toFixed(1)}%
+            <span className="metric-val" style={{ color: totals.marginPercent >= 30 ? '#34D399' : '#FBBF24' }}>
+              {totals.marginPercent.toFixed(1)}%
             </span>
           </div>
-          <div className="metric-item">
+          <div className="metric-item" style={{ marginTop: '12px' }}>
+            <span className="metric-lbl">Gross Profit</span>
+            <span className="metric-val" style={{ color: totals.grossProfit >= 0 ? '#34D399' : '#F87171' }}>
+              {Math.round(totals.grossProfit).toLocaleString()}{currencyLabel ? ` ${currencyLabel}` : ''}
+            </span>
+          </div>
+          <div className="metric-item" style={{ marginTop: '12px' }}>
             <span className="metric-lbl">Net Present Value (NPV)</span>
             <span className="metric-val">{Math.round(totals.npv).toLocaleString()}{currencyLabel ? ` ${currencyLabel}` : ''}</span>
           </div>
@@ -1388,18 +1700,12 @@ export default function CommercialEstimation() {
             <span className="metric-val">{totals.totalManDays} Man-days</span>
           </div>
           <div className="metric-item" style={{ marginTop: '12px' }}>
-            <span className="metric-lbl">Avg Revenue/Employee</span>
-            <span className="metric-val">
-              {totals.totalManDays > 0 ? Math.round(totals.sellingPrice / (totals.totalManDays / 22)).toLocaleString() : 0} {projectInfo.currency}
-            </span>
-          </div>
-          <div className="metric-item" style={{ marginTop: '12px' }}>
             <span className="metric-lbl">Est. Break-even</span>
-            <span className="metric-val">Month {totals.breakeven}</span>
+            <span className="metric-val">{totals.breakEvenMonth ? `Month ${totals.breakEvenMonth}` : 'N/A'}</span>
           </div>
           <div className="metric-item" style={{ marginTop: '12px' }}>
             <span className="metric-lbl">ROI Rate</span>
-            <span className="metric-val">{totals.roi.toFixed(1)}%</span>
+            <span className="metric-val">{totals.roiPercent.toFixed(1)}%</span>
           </div>
         </div>
       </div>
@@ -1415,8 +1721,8 @@ export default function CommercialEstimation() {
           </button>
         </div>
         <div className="right-actions">
-          <button className="btn-outline" onClick={() => showToast('Excel sheet successfully exported!', 'success')}>Export Excel</button>
-          <button className="btn-outline" onClick={() => showToast('Proposal documents generated!', 'success')}>Generate Proposal</button>
+          <button className="btn-outline" onClick={handleExportExcel}>Export Excel</button>
+          <button className="btn-outline" onClick={handleGenerateProposal}>Generate Proposal</button>
           <button 
             className="btn-success-green" 
             disabled={saving} 
