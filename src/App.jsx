@@ -18,6 +18,7 @@ import Import from './pages/Import';
 import CommercialEstimation from './pages/CommercialEstimation';
 import SSOSuccess from './pages/SSOSuccess';
 import AccountSettings from './pages/AccountSettings';
+import LandingPage from './pages/LandingPage';
 import Layout from './components/Layout';
 import { FeedbackProvider } from './context/FeedbackContext';
 
@@ -82,9 +83,11 @@ function App() {
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/change-password" element={<ChangePassword />} />
           
+          {/* Public Landing Page */}
+          <Route path="/" element={<LandingPage />} />
+
           {/* Protected Routes wrapper */}
           <Route element={currentUser ? <Layout user={currentUser} onLogout={handleLogout} /> : <Navigate to="/login" replace />}>
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/leads" element={<Leads />} />
             <Route path="/leads/:id" element={<Leads />} />

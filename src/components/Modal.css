@@ -1,15 +1,17 @@
 .modal-dialog {
   padding: 0;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
   border: 1px solid var(--color-border);
   width: fit-content;
-  min-width: 600px;
+  min-width: 620px;
   max-width: 95vw;
   overflow: hidden;
+  box-shadow: var(--shadow-xl);
 }
 
 .modal-dialog::backdrop {
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(5px);
 }
 
 .modal-header {
@@ -18,46 +20,50 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  background-color: var(--color-surface-subtle);
 }
 
 .modal-header h3 {
   margin: 0;
   font-size: 1.25rem;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--color-text-main);
+  letter-spacing: -0.01em;
 }
 
 .close-btn {
   border: none;
   background: transparent;
   color: var(--color-text-muted);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-full);
   padding: 6px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: all var(--transition-fast);
 }
 
 .close-btn:hover {
-  background-color: var(--color-background);
-  color: var(--color-text-main);
+  background-color: var(--color-primary-subtle);
+  color: var(--color-primary);
 }
 
 .quick-lead-content {
   padding: 24px;
+  background-color: var(--color-surface);
 }
 
 .quick-create-form {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 22px;
 }
 
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(220px, 1fr));
-  gap: 20px 24px;
+  gap: 18px 24px;
 }
 
 .form-group {
@@ -67,27 +73,55 @@
 
 .form-group label {
   margin-bottom: 6px;
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 600;
   color: var(--color-text-main);
 }
 
+.form-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
+.form-header-row label {
+  margin-bottom: 0;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.word-counter {
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 .required {
-  color: #ef4444;
+  color: var(--color-danger);
+  display: inline;
 }
 
 .form-group input,
 .form-group select,
 .form-group textarea {
   width: 100%;
-  padding: 0 12px;
+  padding: 0 14px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   font-size: 14px;
   box-sizing: border-box;
-  background: #fff;
+  background: var(--color-surface);
+  color: var(--color-text-main);
   font-family: inherit;
-  transition: border-color 0.15s ease;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .form-group input,
@@ -97,7 +131,7 @@
 
 .form-group textarea {
   height: 80px;
-  padding: 8px 12px;
+  padding: 10px 14px;
   resize: vertical;
 }
 
@@ -105,20 +139,23 @@
 .form-group select:focus,
 .form-group textarea:focus {
   outline: none;
-  border-color: #2563eb;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 
 .form-group input.input-error,
 .form-group select.input-error,
 .form-group textarea.input-error {
-  border-color: #ef4444;
+  border-color: var(--color-danger);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12);
 }
 
 .field-error-text {
-  color: #ef4444;
+  color: var(--color-danger);
   font-size: 12px;
   margin-top: 4px;
   display: block;
+  font-weight: 500;
 }
 
 .word-counter-container {
@@ -128,17 +165,11 @@
   margin-top: 4px;
 }
 
-.word-counter {
-  font-size: 11px;
-  font-weight: 500;
-  transition: color 0.15s ease;
-}
-
 .modal-error-banner {
-  background-color: #fef2f2;
-  border: 1px solid #fecaca;
-  color: #b91c1c;
-  padding: 10px 14px;
+  background-color: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-border);
+  color: #B91C1C;
+  padding: 12px 16px;
   border-radius: var(--radius-md);
   font-size: 13px;
   font-weight: 500;
@@ -151,7 +182,7 @@
   display: flex;
   justify-content: flex-end;
   gap: 12px;
-  padding-top: 16px;
+  padding-top: 18px;
   border-top: 1px solid var(--color-border);
 }
 
@@ -164,4 +195,4 @@
   .form-grid {
     grid-template-columns: 1fr;
   }
-}
+}

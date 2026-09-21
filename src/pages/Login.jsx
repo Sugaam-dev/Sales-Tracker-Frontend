@@ -77,44 +77,21 @@ export default function Login({ onLogin }) {
     <div className="login-container">
       <div className="login-card">
         <div className="login-header">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginBottom: '16px' }}>
-            <img src="/logo.png" alt="PMRG Solution Logo" style={{ height: '48px', objectFit: 'contain', maxWidth: '100%' }} />
+          <div className="login-logo-wrap">
+            <img src="/logo.png" alt="PMRG Solution Logo" />
           </div>
           <h2>Welcome</h2>
           <p>Please enter your details to sign in.</p>
         </div>
 
         {notice && !error && (
-          <div
-            style={{
-              color: '#10B981',
-              backgroundColor: 'rgba(16, 185, 129, 0.1)',
-              padding: '10px',
-              borderRadius: '6px',
-              marginBottom: '16px',
-              fontSize: '14px',
-              textAlign: 'center',
-              border: '1px solid rgba(16, 185, 129, 0.2)',
-            }}
-          >
+          <div className="login-notice">
             {notice}
           </div>
         )}
 
         {error && (
-          <div
-            className="error-message"
-            style={{
-              color: '#EF4444',
-              backgroundColor: 'rgba(239, 68, 68, 0.1)',
-              padding: '10px',
-              borderRadius: '6px',
-              marginBottom: '16px',
-              fontSize: '14px',
-              textAlign: 'center',
-              border: '1px solid rgba(239, 68, 68, 0.2)',
-            }}
-          >
+          <div className="login-error">
             {error}
           </div>
         )}
@@ -134,7 +111,7 @@ export default function Login({ onLogin }) {
           <div className="form-group relative">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
               <label>Password</label>
-              <Link to="/forgot-password" style={{ fontSize: '0.8125rem', fontWeight: 500 }}>
+              <Link to="/forgot-password" className="forgot-password-link">
                 Forgot password?
               </Link>
             </div>

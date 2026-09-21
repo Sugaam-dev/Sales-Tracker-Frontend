@@ -1,16 +1,40 @@
 .kpi-card {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: 20px 22px;
+  box-shadow: 0 10px 26px rgba(5, 12, 28, 0.45);
+  transition: all var(--transition-normal);
+  position: relative;
+  overflow: hidden;
+}
+
+.kpi-card::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: transparent;
+  transition: background var(--transition-fast);
 }
 
 .kpi-card.clickable {
   cursor: pointer;
-  transition: transform 0.2s ease;
 }
 
 .kpi-card.clickable:hover {
-  transform: translateY(-2px);
+  transform: translateY(-3px);
+  border-color: #38BDF8;
+  box-shadow: 0 14px 34px rgba(5, 12, 28, 0.65), 0 0 24px rgba(32, 86, 224, 0.25);
+}
+
+.kpi-card.clickable:hover::after {
+  background: linear-gradient(90deg, #2056E0, #38BDF8);
 }
 
 .kpi-header {
@@ -22,31 +46,41 @@
 
 .kpi-title {
   margin: 0;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: var(--color-text-muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #8FA4C7;
 }
 
 .kpi-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-md);
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  transition: transform var(--transition-fast);
+}
+
+.kpi-card:hover .kpi-icon {
+  transform: scale(1.08);
 }
 
 .kpi-value {
-  font-size: 1.75rem;
-  font-weight: 700;
-  color: var(--color-text-main);
+  font-size: 1.85rem;
+  font-weight: 800;
+  color: #FFFFFF;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
 }
 
 .kpi-subtext {
   display: flex;
   align-items: center;
-  gap: 4px;
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
-}
+  gap: 6px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: #7B94BD;
+}
