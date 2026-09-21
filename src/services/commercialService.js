@@ -1,5 +1,6 @@
 import { API } from '../api/config';
 import { authenticatedFetch } from './authService';
+import { apiCacheStore } from './apiCacheStore';
 
 function formatLeadId(leadId) {
   if (!leadId) return '';
@@ -44,15 +45,23 @@ export function convertBetweenCurrencies(amount, fromCurrency, toCurrency) {
   return convertFromUSD(amountInUSD, toCurrency);
 }
 
-export async function fetchCommercial(leadId, currency = '') {
+export async function fetchCommercial(leadId, currency = '', bypassCache = false) {
   const formattedId = formatLeadId(leadId);
-  const query = currency && currency !== 'select' ? `?currency=${encodeURIComponent(currency)}` : '';
-  const response = await authenticatedFetch(`${API.COMMERCIAL(formattedId)}${query}`);
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(data.message || 'Failed to fetch commercial estimation.');
-  }
-  return data;
+  const cacheKey = `commercial:${formattedId}:${currency}`;
+
+  return apiCacheStore.fetchWithCache(
+    cacheKey,
+    async () => {
+      const query = currency && currency !== 'select' ? `?currency=${encodeURIComponent(currency)}` : '';
+      const response = await authenticatedFetch(`${API.COMMERCIAL(formattedId)}${query}`);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to fetch commercial estimation.');
+      }
+      return data;
+    },
+    { ttlMs: 1 * 60 * 1000, bypassCache }
+  );
 }
 
 export async function updateCommercial(leadId, payload, currency = '') {
@@ -70,17 +79,30 @@ export async function updateCommercial(leadId, payload, currency = '') {
     const errorDetails = data.errors ? ` (${typeof data.errors === 'string' ? data.errors : JSON.stringify(data.errors)})` : '';
     throw new Error((data.message || 'Failed to update commercial estimation.') + errorDetails);
   }
+  // Invalidate commercial and lead caches for fresh data reflection
+  apiCacheStore.invalidatePattern(`commercial:${formattedId}`);
+  apiCacheStore.invalidatePattern(`commercial_analytics:${formattedId}`);
+  apiCacheStore.invalidatePattern('leads');
+  apiCacheStore.invalidatePattern(`lead:${formattedId}`);
+  apiCacheStore.invalidatePattern('dashboard_summary');
   return data;
 }
 
-export async function fetchCommercialAnalytics(leadId, currency = '') {
+export async function fetchCommercialAnalytics(leadId, currency = '', bypassCache = false) {
   const formattedId = formatLeadId(leadId);
-  const query = currency && currency !== 'select' ? `?currency=${encodeURIComponent(currency)}` : '';
-  const response = await authenticatedFetch(`${API.COMMERCIAL(formattedId)}/analytics${query}`);
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(data.message || 'Failed to fetch commercial analytics.');
-  }
-  return data;
-}
+  const cacheKey = `commercial_analytics:${formattedId}:${currency}`;
 
+  return apiCacheStore.fetchWithCache(
+    cacheKey,
+    async () => {
+      const query = currency && currency !== 'select' ? `?currency=${encodeURIComponent(currency)}` : '';
+      const response = await authenticatedFetch(`${API.COMMERCIAL(formattedId)}/analytics${query}`);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to fetch commercial analytics.');
+      }
+      return data;
+    },
+    { ttlMs: 1 * 60 * 1000, bypassCache }
+  );
+}

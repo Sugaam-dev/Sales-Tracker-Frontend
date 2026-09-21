@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Phone, Mail, Calendar, MonitorPlay, Globe, Plus, X, Play, Pause, Paperclip, FileText, CheckCircle2, Clock, Sparkles, RefreshCw, ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { fetchLeads, fetchCurrentUsers, fetchActivitiesFeed, fetchActivitiesSummary, logGlobalActivity } from '../services/leadService';
+import { fetchLeads, fetchActivitiesFeed, fetchActivitiesSummary, logGlobalActivity } from '../services/leadService';
+import { normalizeError } from '../services/apiError';
 import { useToast } from '../context/FeedbackContext';
+import { useMasterData } from '../context/MasterDataContext';
+import { SkeletonCard, SkeletonBlock, SkeletonText } from '../components/common/Skeleton';
 import './Activities.css';
 
 // Helper to determine icon and color class for activity types
@@ -26,6 +29,7 @@ const getActivityMeta = (type) => {
 };
 
 export default function Activities() {
+  const { usersList: masterUsersList } = useMasterData();
   const showToast = useToast();
   const [activeFilter, setActiveFilter] = useState('All Activity Types');
   const [userFilter, setUserFilter] = useState('All Users');
@@ -36,9 +40,10 @@ export default function Activities() {
   
   // Data states
   const [leadsList, setLeadsList] = useState([]);
-  const [usersList, setUsersList] = useState([]);
+  const usersList = masterUsersList;
   const [activitiesData, setActivitiesData] = useState([]);
-  const [activitiesLoading, setActivitiesLoading] = useState(false);
+  const [activitiesLoading, setActivitiesLoading] = useState(true);
+  const [activitiesError, setActivitiesError] = useState(null);
   const [typeCounts, setTypeCounts] = useState({
     all: 0,
     call: 0,
@@ -113,46 +118,35 @@ export default function Activities() {
     sessionStorage.setItem('isAiExpanded_activities', JSON.stringify(isAiExpanded));
   }, [isAiExpanded]);
 
-  // Load Initial Users & Leads for dropdown options
+  // Parallelized initial data loading on mount
   useEffect(() => {
-    const loadDropdownData = async () => {
+    let isMounted = true;
+    const loadInitialData = async () => {
       try {
-        const [leadsRes, usersRes] = await Promise.allSettled([
+        const [leadsRes, summaryRes] = await Promise.all([
           fetchLeads({ limit: 100 }),
-          fetchCurrentUsers(),
+          fetchActivitiesSummary()
         ]);
-        if (leadsRes.status === 'fulfilled' && leadsRes.value?.success && leadsRes.value?.data) {
-          setLeadsList(leadsRes.value.data);
-        }
-        if (usersRes.status === 'fulfilled' && usersRes.value?.success && usersRes.value?.data) {
-          setUsersList(usersRes.value.data);
+        if (isMounted) {
+          if (leadsRes && leadsRes.success && leadsRes.data) {
+            setLeadsList(leadsRes.data);
+          }
+          if (summaryRes && summaryRes.success && summaryRes.data) {
+            setSummaryData(summaryRes.data);
+          }
         }
       } catch (err) {
-        console.error('Failed to load dropdown options:', err);
+        console.error('Failed to load initial activities data:', err);
       }
     };
-    loadDropdownData();
+    loadInitialData();
+    return () => { isMounted = false; };
   }, []);
-
-  // Fetch Activities Summary Metrics
-  const loadSummary = useCallback(async () => {
-    try {
-      const res = await fetchActivitiesSummary();
-      if (res.success && res.data) {
-        setSummaryData(res.data);
-      }
-    } catch (err) {
-      console.error('Failed to load activities summary:', err);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadSummary();
-  }, [loadSummary]);
 
   // Fetch Activities Feed from Backend with Filters & Pagination
   const loadActivitiesFeed = useCallback(async () => {
     setActivitiesLoading(true);
+    setActivitiesError(null);
     try {
       const query = {
         page: currentPage,
@@ -216,6 +210,7 @@ export default function Activities() {
       }
     } catch (err) {
       console.error('Failed to load activities feed:', err);
+      setActivitiesError(normalizeError(err, 'Failed to load activity feed.'));
     } finally {
       setActivitiesLoading(false);
     }
@@ -620,6 +615,17 @@ export default function Activities() {
           {activitiesLoading ? (
             <div style={{ padding: '32px', textAlign: 'center', color: 'var(--color-text-muted)' }}>
               Loading activities...
+            </div>
+          ) : activitiesError ? (
+            <div style={{ padding: '24px', textAlign: 'center', backgroundColor: '#FEF2F2', borderRadius: '8px', border: '1px solid #F87171', margin: '16px 0' }}>
+              <p style={{ color: '#DC2626', fontWeight: '500', margin: '0 0 12px 0', fontSize: '14px' }}>{activitiesError}</p>
+              <button 
+                onClick={loadActivitiesFeed}
+                className="btn-primary"
+                style={{ padding: '6px 16px', fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+              >
+                <RefreshCw size={14} /> Retry
+              </button>
             </div>
           ) : activitiesData.length > 0 ? (
             activitiesData.map(activity => {

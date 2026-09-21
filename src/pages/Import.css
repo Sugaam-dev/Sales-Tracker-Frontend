@@ -1,7 +1,7 @@
 .import-container {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 20px;
 }
 
 .import-header {
@@ -28,7 +28,7 @@
 .drop-zone {
   border: 2px dashed var(--color-border);
   border-radius: var(--radius-lg);
-  padding: 64px 32px;
+  padding: 56px 32px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -43,30 +43,60 @@
   background-color: rgba(29, 78, 216, 0.05);
 }
 
-.drop-zone.has-file {
-  border-style: solid;
+.drop-zone.extracting {
   border-color: var(--color-primary);
-  background-color: var(--color-surface);
+  background-color: rgba(29, 78, 216, 0.03);
+  cursor: wait;
 }
 
-.upload-prompt, .file-info {
+.upload-prompt, .extracting-prompt {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 12px;
 }
 
-.upload-prompt h3, .file-info h3 {
+.upload-prompt h3, .extracting-prompt h3 {
   font-size: 1.25rem;
   font-weight: 600;
   color: var(--color-text-main);
-  margin-top: 8px;
+  margin-top: 4px;
+}
+
+.supported-formats-pills {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 6px;
+}
+
+.format-pill {
+  font-size: 0.75rem;
+  font-weight: 600;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-primary);
+  padding: 4px 10px;
+  border-radius: 9999px;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 .text-primary { color: var(--color-primary); }
 .text-success { color: var(--color-success); }
+.text-warning { color: var(--color-warning, #f59e0b); }
+.text-danger { color: var(--color-danger, #ef4444); }
 .text-muted { color: var(--color-text-muted); }
-.mt-4 { margin-top: 16px; }
+.text-xs { font-size: 0.75rem; }
+.mt-2 { margin-top: 8px; }
 
 .mandatory-columns-list {
   list-style: none;
@@ -74,7 +104,7 @@
   margin-top: 16px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .mandatory-columns-list li {
@@ -82,7 +112,7 @@
   align-items: center;
   gap: 12px;
   font-weight: 500;
-  font-size: 0.875rem;
+  font-size: 0.85rem;
   padding: 8px 12px;
   background-color: var(--color-background);
   border-radius: var(--radius-md);
@@ -94,7 +124,207 @@
   }
 }
 
-/* Custom Interactive Modal for Import Results */
+/* ============================================================ */
+/* PREVIEW & REVIEW TABLE STYLES                                */
+/* ============================================================ */
+
+.preview-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.preview-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 16px;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.preview-stats-bar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.stat-badge {
+  font-size: 0.815rem;
+  padding: 6px 12px;
+  border-radius: var(--radius-md);
+  background-color: var(--color-background);
+  border: 1px solid var(--color-border);
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.stat-badge.success {
+  border-color: rgba(16, 185, 129, 0.4);
+  color: var(--color-success);
+}
+
+.stat-badge.danger {
+  border-color: rgba(239, 68, 68, 0.4);
+  background-color: rgba(239, 68, 68, 0.05);
+  color: var(--color-danger);
+}
+
+.preview-action-buttons {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.preview-warning-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background-color: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: var(--radius-md);
+  color: #b45309;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.preview-table-card {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow-x: auto;
+  max-height: 65vh;
+}
+
+.preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.825rem;
+  text-align: left;
+}
+
+.preview-table th {
+  position: sticky;
+  top: 0;
+  background-color: var(--color-background);
+  padding: 12px 10px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  border-bottom: 2px solid var(--color-border);
+  z-index: 10;
+  white-space: nowrap;
+}
+
+.preview-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: top;
+}
+
+.preview-table tr.row-invalid {
+  background-color: rgba(239, 68, 68, 0.02);
+}
+
+.preview-table tr:hover {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+.table-input {
+  width: 100%;
+  padding: 6px 8px;
+  font-size: 0.825rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface);
+  color: var(--color-text-main);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.table-input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(29, 78, 216, 0.1);
+}
+
+.table-input.input-error {
+  border-color: var(--color-danger);
+  background-color: rgba(239, 68, 68, 0.04);
+}
+
+.phone-country-group {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.country-select {
+  padding: 6px 4px;
+  font-size: 0.775rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface);
+  color: var(--color-text-main);
+  max-width: 105px;
+  outline: none;
+}
+
+.phone-input {
+  flex: 1;
+}
+
+.field-error-text {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--color-danger);
+  margin-top: 3px;
+  line-height: 1.2;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+
+.status-badge.valid {
+  background-color: rgba(16, 185, 129, 0.1);
+  color: var(--color-success);
+}
+
+.status-badge.error {
+  background-color: rgba(239, 68, 68, 0.1);
+  color: var(--color-danger);
+}
+
+.delete-row-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  padding: 6px;
+  border-radius: var(--radius-sm);
+  transition: all 0.15s;
+}
+
+.delete-row-btn:hover {
+  color: var(--color-danger);
+  background-color: rgba(239, 68, 68, 0.1);
+}
+
+/* ============================================================ */
+/* RESULT MODAL STYLES                                          */
+/* ============================================================ */
+
 .import-modal-overlay {
   position: fixed;
   top: 0;

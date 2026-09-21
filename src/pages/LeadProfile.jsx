@@ -2,50 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import { Upload, X } from 'lucide-react';
 import { fetchLeadActivities, createActivity, completeActivity } from '../services/leadService';
 import { useToast } from '../context/FeedbackContext';
-
-// Country codes with flags (emoji flags work universally)
-const COUNTRY_CODES = [
-  { code: '+1',   iso: 'US', flag: '🇺🇸', name: 'United States' },
-  { code: '+1',   iso: 'CA', flag: '🇨🇦', name: 'Canada' },
-  { code: '+91',  iso: 'IN', flag: '🇮🇳', name: 'India' },
-  { code: '+44',  iso: 'GB', flag: '🇬🇧', name: 'United Kingdom' },
-  { code: '+61',  iso: 'AU', flag: '🇦🇺', name: 'Australia' },
-  { code: '+49',  iso: 'DE', flag: '🇩🇪', name: 'Germany' },
-  { code: '+33',  iso: 'FR', flag: '🇫🇷', name: 'France' },
-  { code: '+81',  iso: 'JP', flag: '🇯🇵', name: 'Japan' },
-  { code: '+86',  iso: 'CN', flag: '🇨🇳', name: 'China' },
-  { code: '+55',  iso: 'BR', flag: '🇧🇷', name: 'Brazil' },
-  { code: '+7',   iso: 'RU', flag: '🇷🇺', name: 'Russia' },
-  { code: '+27',  iso: 'ZA', flag: '🇿🇦', name: 'South Africa' },
-  { code: '+971', iso: 'AE', flag: '🇦🇪', name: 'UAE' },
-  { code: '+966', iso: 'SA', flag: '🇸🇦', name: 'Saudi Arabia' },
-  { code: '+65',  iso: 'SG', flag: '🇸🇬', name: 'Singapore' },
-  { code: '+60',  iso: 'MY', flag: '🇲🇾', name: 'Malaysia' },
-  { code: '+62',  iso: 'ID', flag: '🇮🇩', name: 'Indonesia' },
-  { code: '+82',  iso: 'KR', flag: '🇰🇷', name: 'South Korea' },
-  { code: '+39',  iso: 'IT', flag: '🇮🇹', name: 'Italy' },
-  { code: '+34',  iso: 'ES', flag: '🇪🇸', name: 'Spain' },
-  { code: '+31',  iso: 'NL', flag: '🇳🇱', name: 'Netherlands' },
-  { code: '+46',  iso: 'SE', flag: '🇸🇪', name: 'Sweden' },
-  { code: '+41',  iso: 'CH', flag: '🇨🇭', name: 'Switzerland' },
-  { code: '+47',  iso: 'NO', flag: '🇳🇴', name: 'Norway' },
-  { code: '+45',  iso: 'DK', flag: '🇩🇰', name: 'Denmark' },
-  { code: '+358', iso: 'FI', flag: '🇫🇮', name: 'Finland' },
-  { code: '+48',  iso: 'PL', flag: '🇵🇱', name: 'Poland' },
-  { code: '+52',  iso: 'MX', flag: '🇲🇽', name: 'Mexico' },
-  { code: '+54',  iso: 'AR', flag: '🇦🇷', name: 'Argentina' },
-  { code: '+20',  iso: 'EG', flag: '🇪🇬', name: 'Egypt' },
-  { code: '+234', iso: 'NG', flag: '🇳🇬', name: 'Nigeria' },
-  { code: '+254', iso: 'KE', flag: '🇰🇪', name: 'Kenya' },
-  { code: '+92',  iso: 'PK', flag: '🇵🇰', name: 'Pakistan' },
-  { code: '+880', iso: 'BD', flag: '🇧🇩', name: 'Bangladesh' },
-  { code: '+94',  iso: 'LK', flag: '🇱🇰', name: 'Sri Lanka' },
-  { code: '+977', iso: 'NP', flag: '🇳🇵', name: 'Nepal' },
-  { code: '+66',  iso: 'TH', flag: '🇹🇭', name: 'Thailand' },
-  { code: '+84',  iso: 'VN', flag: '🇻🇳', name: 'Vietnam' },
-  { code: '+63',  iso: 'PH', flag: '🇵🇭', name: 'Philippines' },
-  { code: '+64',  iso: 'NZ', flag: '🇳🇿', name: 'New Zealand' },
-];
+import { COUNTRY_CODES, normalizeCountryCode, getCountryObj } from '../constants/countries';
+import { validatePhoneNumber, getMaxPhoneDigits } from '../utils/phoneValidation';
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const LIFECYCLE_PIPELINES = {
@@ -63,64 +21,12 @@ export const LIFECYCLE_PIPELINES = {
   }
 };
 
-/**
- * Validates a local phone number respecting country code and leading zero rule.
- */
-function validatePhone(number, countryCode) {
-  const trimmed = (number || '').trim();
-  if (!trimmed) return { valid: false, message: 'Phone number is required.' };
-  if (trimmed.startsWith('0')) return { valid: false, message: 'Phone number must not start with 0.' };
-
-  const digits = trimmed.replace(/\D/g, '');
-  if (!digits) return { valid: false, message: 'Enter a valid phone number.' };
-  if (digits.startsWith('0')) return { valid: false, message: 'Phone number must not start with 0.' };
-
-  const country = String(countryCode || '').toUpperCase();
-  if (country.includes('IN') || country.includes('+91')) {
-    if (digits.length !== 10) return { valid: false, message: 'Invalid phone number for the selected country.' };
-  } else if (country.includes('US') || country.includes('+1')) {
-    if (digits.length !== 10) return { valid: false, message: 'Invalid phone number for the selected country.' };
-  } else if (country.includes('UK') || country.includes('GB') || country.includes('+44')) {
-    if (digits.length < 9 || digits.length > 10) return { valid: false, message: 'Invalid phone number for the selected country.' };
-  } else if (country.includes('AE') || country.includes('+971')) {
-    if (digits.length !== 9) return { valid: false, message: 'Invalid phone number for the selected country.' };
-  } else if (country.includes('SG') || country.includes('+65')) {
-    if (digits.length !== 8) return { valid: false, message: 'Invalid phone number for the selected country.' };
-  } else {
-    if (digits.length < 7 || digits.length > 15) return { valid: false, message: 'Enter a valid phone number.' };
-  }
-
-  return { valid: true, message: '' };
-}
-
 function validateEmail(val) {
   const trimmed = (val || '').trim();
   if (!trimmed) return { valid: false, message: 'Email is required.' };
   const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
   if (!emailRegex.test(trimmed)) return { valid: false, message: 'Enter a valid email address.' };
   return { valid: true, message: '' };
-}
-
-function normalizeCountryCode(val, fallback = 'IN|+91') {
-  if (!val) return fallback;
-  const str = String(val).trim();
-  if (str.includes('|')) return str;
-  const code = str.startsWith('+') ? str : `+${str}`;
-  const found = COUNTRY_CODES.find(c => c.code === code || c.iso.toUpperCase() === str.toUpperCase());
-  return found ? `${found.iso}|${found.code}` : fallback;
-}
-
-/**
- * Returns maximum allowed phone number digits based on selected country code.
- */
-function getMaxPhoneDigits(countryCode) {
-  const country = String(countryCode || '').toUpperCase();
-  if (country.includes('IN') || country.includes('+91')) return 10;
-  if (country.includes('US') || country.includes('+1')) return 10;
-  if (country.includes('UK') || country.includes('GB') || country.includes('+44')) return 10;
-  if (country.includes('AE') || country.includes('+971')) return 9;
-  if (country.includes('SG') || country.includes('+65')) return 8;
-  return 15;
 }
 
 /**
@@ -283,7 +189,7 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
   const [priority, setPriority] = useState(lead?.priority || 'select');
   const [source, setSource] = useState(lead?.source || 'select');
   const [sentiment, setSentiment] = useState(lead?.sentiment || 'select');
-  const [value] = useState(lead?.value || '');
+  const [value, setValue] = useState(lead?.value || '');
   const [lostReason, setLostReason] = useState(lead?.lostReason || lead?.reason || '');
   const [linkedinProfileUrl, setLinkedinProfileUrl] = useState(lead?.linkedinProfileUrl || lead?.linkedin?.profile || '');
   const [linkedinCompanyPageUrl, setLinkedinCompanyPageUrl] = useState(lead?.linkedinCompanyPageUrl || lead?.linkedin?.company || '');
@@ -401,11 +307,11 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
     const max = getMaxPhoneDigits(phoneCountry);
     const sanitized = digits.slice(0, max);
     setPhone(sanitized);
-    if (phoneTouched) setPhoneError(validatePhone(sanitized, phoneCountry).message);
+    if (phoneTouched) setPhoneError(validatePhoneNumber(sanitized, phoneCountry, true, 'Phone number is required.').message);
   };
   const handlePhoneBlur = () => {
     setPhoneTouched(true);
-    setPhoneError(validatePhone(phone, phoneCountry).message);
+    setPhoneError(validatePhoneNumber(phone, phoneCountry, true, 'Phone number is required.').message);
   };
 
   const handleAltPhoneChange = (val) => {
@@ -414,12 +320,12 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
     const sanitized = digits.slice(0, max);
     setAltPhone(sanitized);
     if (altPhoneTouched) {
-      setAltPhoneError(sanitized ? validatePhone(sanitized, altPhoneCountry).message : '');
+      setAltPhoneError(sanitized ? validatePhoneNumber(sanitized, altPhoneCountry, false).message : '');
     }
   };
   const handleAltPhoneBlur = () => {
     setAltPhoneTouched(true);
-    setAltPhoneError(altPhone ? validatePhone(altPhone, altPhoneCountry).message : '');
+    setAltPhoneError(altPhone ? validatePhoneNumber(altPhone, altPhoneCountry, false).message : '');
   };
 
   const handleOfficePhoneChange = (val) => {
@@ -428,14 +334,14 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
     const sanitized = digits.slice(0, max);
     setOfficePhone(sanitized);
     if (officePhoneTouched) {
-      const msg = validatePhone(sanitized, officePhoneCountry).message;
-      setOfficePhoneError(msg ? msg.replace('Phone number', 'Office Phone Number') : '');
+      const msg = validatePhoneNumber(sanitized, officePhoneCountry, true, 'Office Phone Number is required.').message;
+      setOfficePhoneError(msg);
     }
   };
   const handleOfficePhoneBlur = () => {
     setOfficePhoneTouched(true);
-    const msg = validatePhone(officePhone, officePhoneCountry).message;
-    setOfficePhoneError(msg ? msg.replace('Phone number', 'Office Phone Number') : '');
+    const msg = validatePhoneNumber(officePhone, officePhoneCountry, true, 'Office Phone Number is required.').message;
+    setOfficePhoneError(msg);
   };
 
   const handleEmailChange = (e) => {
@@ -551,16 +457,15 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
       setOfficePhoneError('');
       return true;
     }
-    const pv = validatePhone(val, officePhoneCountry);
-    const msg = pv.message ? pv.message.replace('Phone number', 'Office Phone Number') : '';
-    setOfficePhoneError(msg);
+    const pv = validatePhoneNumber(val, officePhoneCountry, true, 'Office Phone Number is required.');
+    setOfficePhoneError(pv.message);
     return pv.valid;
   };
 
   /** Validate phones and email before saving */
   const handleSave = () => {
-    const pv = validatePhone(phone, phoneCountry);
-    const av = altPhone ? validatePhone(altPhone, altPhoneCountry) : { valid: true, message: '' };
+    const pv = validatePhoneNumber(phone, phoneCountry, true, 'Phone number is required.');
+    const av = altPhone ? validatePhoneNumber(altPhone, altPhoneCountry, false) : { valid: true, message: '' };
     const ev = validateEmail(email);
 
     setPhoneTouched(true);
@@ -627,9 +532,9 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
       return;
     }
 
-    const officeCountryObj = COUNTRY_CODES.find(c => `${c.iso}|${c.code}` === officePhoneCountry || c.code === officePhoneCountry || c.iso === officePhoneCountry);
-    const phoneCountryObj = COUNTRY_CODES.find(c => `${c.iso}|${c.code}` === phoneCountry || c.code === phoneCountry || c.iso === phoneCountry);
-    const altCountryObj = COUNTRY_CODES.find(c => `${c.iso}|${c.code}` === altPhoneCountry || c.code === altPhoneCountry || c.iso === altPhoneCountry);
+    const officeCountryObj = getCountryObj(officePhoneCountry);
+    const phoneCountryObj = getCountryObj(phoneCountry);
+    const altCountryObj = getCountryObj(altPhoneCountry);
 
     onSave({
       company,
@@ -762,8 +667,8 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
                     const truncated = (officePhone || '').replace(/\D/g, '').slice(0, max);
                     setOfficePhone(truncated);
                     if (officePhoneTouched || officePhone) {
-                      const msg = validatePhone(truncated, val).message;
-                      setOfficePhoneError(msg ? msg.replace('Phone number', 'Office Phone Number') : '');
+                      const msg = validatePhoneNumber(truncated, val, true, 'Office Phone Number is required.').message;
+                      setOfficePhoneError(msg);
                     }
                   }}
                   error={officePhoneError}
@@ -861,7 +766,7 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
                     const truncated = (phone || '').replace(/\D/g, '').slice(0, max);
                     setPhone(truncated);
                     if (phoneTouched || phone) {
-                      setPhoneError(validatePhone(truncated, val).message);
+                      setPhoneError(validatePhoneNumber(truncated, val, true, 'Phone number is required.').message);
                     }
                   }}
                   error={phoneError}
@@ -892,7 +797,7 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
                     const truncated = (altPhone || '').replace(/\D/g, '').slice(0, max);
                     setAltPhone(truncated);
                     if (altPhoneTouched || altPhone) {
-                      setAltPhoneError(truncated ? validatePhone(truncated, val).message : '');
+                      setAltPhoneError(truncated ? validatePhoneNumber(truncated, val, false).message : '');
                     }
                   }}
                   error={altPhoneError}
@@ -910,39 +815,26 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
             </div>
           </div>
 
-          {/* ── Commercial Section ── */}
-          {/* <div className="profile-section">
-            <h3>Commercial Section</h3>
-            <div className="form-grid three-col">
+          {/* ── Commercial Info ── */}
+          <div className="profile-section">
+            <h3>Commercial Info</h3>
+            <div className="form-grid">
               <div className="form-group">
-                <label>Deal Value / Est. Closing Value</label>
-                <input type="text" value={value} onChange={(e) => setValue(e.target.value)} placeholder="e.g. $150,000" />
-              </div>
-              <div className="form-group">
-                <label>Closing Value</label>
-                <input type="number" defaultValue="150000" />
-              </div>
-              <div className="form-group">
-                <label>Tax Status</label>
-                <select defaultValue="Without Tax">
-                  <option>With Tax</option>
-                  <option>Without Tax</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Commission %</label>
-                <input type="number" defaultValue="5" />
-              </div>
-              <div className="form-group">
-                <label>Commission Amount</label>
-                <input type="number" defaultValue="7500" />
-              </div>
-              <div className="form-group">
-                <label>GST Tracking No.</label>
-                <input type="text" />
+                <label>Deal Value (Effective Selling Price) ($)</label>
+                <input 
+                  type="text" 
+                  value={value ? (String(value).startsWith('$') ? value : `$${Number(value).toLocaleString()}`) : ''} 
+                  disabled
+                  readOnly
+                  placeholder="Evaluated automatically from Commercial Estimation"
+                  style={{ backgroundColor: 'var(--color-bg-subtle, #f8fafc)', cursor: 'not-allowed' }}
+                />
+                <small style={{ display: 'block', marginTop: '4px', color: 'var(--color-text-muted)' }}>
+                  Deal Value is strictly equal to the Effective Selling Price evaluated from the Commercial Estimation section.
+                </small>
               </div>
             </div>
-          </div> */}
+          </div>
 
           {/* ── Timeline & Attachments ── */}
           <div className="profile-section">

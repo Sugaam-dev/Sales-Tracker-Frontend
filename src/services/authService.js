@@ -1,21 +1,28 @@
 import { API, authHeaders } from '../api/config';
+import { apiCacheStore } from './apiCacheStore';
+import { extractErrorMessage, normalizeError } from './apiError';
 
 async function postJSON(url, body) {
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
 
-  const data = await response.json().catch(() => ({}));
+    const data = await response.json().catch(() => ({}));
 
-  if (!response.ok) {
-    throw new Error(data.message || 'Request failed. Please try again.');
+    if (!response.ok) {
+      const errorMsg = data.message || (await extractErrorMessage(response, 'Request failed. Please try again.'));
+      throw new Error(errorMsg);
+    }
+
+    return data;
+  } catch (err) {
+    throw new Error(normalizeError(err));
   }
-
-  return data;
 }
 
 export async function login(identifier, password) {
@@ -143,84 +150,141 @@ export function clearLocalSession() {
   localStorage.removeItem('user');
 }
 
-let isRefreshing = false;
-let refreshSubscribers = [];
+// In-Flight Request Deduplication Map for GET requests
+const inFlightRequests = new Map();
 
-function subscribeTokenRefresh(cb) {
-  refreshSubscribers.push(cb);
-}
+// Single-Flight Auth Refresh Mutex Promise
+let refreshPromise = null;
 
-function onRefreshed(token) {
-  refreshSubscribers.forEach((cb) => cb(token));
-  refreshSubscribers = [];
+function normalizeUrlKey(url, options = {}) {
+  const method = (options.method || 'GET').toUpperCase();
+  try {
+    const parsed = new URL(url, typeof window !== 'undefined' ? window.location.origin : 'http://localhost');
+    const params = new URLSearchParams(parsed.search);
+    const sortedParams = Array.from(params.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+      .join('&');
+    return `${method}:${parsed.origin}${parsed.pathname}${sortedParams ? '?' + sortedParams : ''}`;
+  } catch {
+    return `${method}:${url}`;
+  }
 }
 
 export async function authenticatedFetch(url, options = {}) {
-  let headers = {
-    ...authHeaders(),
-    ...(options.headers || {}),
-  };
+  const method = (options.method || 'GET').toUpperCase();
+  const isGet = method === 'GET' || method === 'HEAD';
+  const requestKey = isGet ? normalizeUrlKey(url, options) : null;
 
-  let response = await fetch(url, {
-    ...options,
-    headers,
-  });
-
-  if (response.status === 401) {
-    const refreshTokenVal = localStorage.getItem('refresh_token');
-    if (!refreshTokenVal) {
-      clearLocalSession();
-      window.location.href = '/login';
-      throw new Error('Unauthorized');
-    }
-
-    if (!isRefreshing) {
-      isRefreshing = true;
-      try {
-        const refreshRes = await fetch(API.REFRESH, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ refresh_token: refreshTokenVal }),
-        });
-
-        if (!refreshRes.ok) {
-          throw new Error('Refresh token invalid');
-        }
-
-        const data = await refreshRes.json();
-        if (data.access_token && data.refresh_token) {
-          localStorage.setItem('token', data.access_token);
-          localStorage.setItem('refresh_token', data.refresh_token);
-          isRefreshing = false;
-          onRefreshed(data.access_token);
-        } else {
-          throw new Error('Invalid refresh response');
-        }
-      } catch (err) {
-        isRefreshing = false;
-        refreshSubscribers = [];
-        clearLocalSession();
-        window.location.href = '/login';
-        throw err;
-      }
-    }
-
-    return new Promise((resolve) => {
-      subscribeTokenRefresh((newToken) => {
-        headers['Authorization'] = `Bearer ${newToken}`;
-        resolve(
-          fetch(url, {
-            ...options,
-            headers,
-          })
-        );
-      });
-    });
+  // In-Flight Request Deduplication for concurrent identical GET requests
+  if (isGet && inFlightRequests.has(requestKey)) {
+    const existing = inFlightRequests.get(requestKey);
+    return existing.then((res) => res.clone());
   }
 
-  return response;
+  const executeRequest = async () => {
+    try {
+      let headers = {
+        ...authHeaders(),
+        ...(options.headers || {}),
+      };
+
+      if (options.body instanceof FormData) {
+        delete headers['Content-Type'];
+      }
+
+      let response = await fetch(url, {
+        ...options,
+        headers,
+      });
+
+      // 401 Unauthorized Handling with Single-Flight Refresh Mutex
+      if (
+        response.status === 401 &&
+        !url.includes('/auth/refresh') &&
+        !url.includes('/auth/login')
+      ) {
+        // Infinite Retry Protection
+        if (options._retry) {
+          clearLocalSession();
+          if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+            window.location.href = '/login';
+          }
+          throw new Error('Session expired or unauthorized.');
+        }
+
+        // Single-flight refresh mutex
+        if (!refreshPromise) {
+          refreshPromise = (async () => {
+            try {
+              const refreshTokenVal = localStorage.getItem('refresh_token');
+              if (!refreshTokenVal) {
+                throw new Error('No refresh token available');
+              }
+
+              const refreshRes = await fetch(API.REFRESH, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ refresh_token: refreshTokenVal }),
+              });
+
+              if (!refreshRes.ok) {
+                const errMsg = await extractErrorMessage(
+                  refreshRes,
+                  'Session expired. Please log in again.'
+                );
+                throw new Error(errMsg);
+              }
+
+              const data = await refreshRes.json();
+              if (data.access_token && data.refresh_token) {
+                localStorage.setItem('token', data.access_token);
+                localStorage.setItem('refresh_token', data.refresh_token);
+                return data.access_token;
+              }
+              throw new Error('Invalid refresh response from server.');
+            } catch (err) {
+              clearLocalSession();
+              if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+                window.location.href = '/login';
+              }
+              throw err;
+            } finally {
+              refreshPromise = null;
+            }
+          })();
+        }
+
+        const newToken = await refreshPromise;
+        const retryHeaders = {
+          ...headers,
+          Authorization: `Bearer ${newToken}`,
+        };
+
+        return authenticatedFetch(url, {
+          ...options,
+          headers: retryHeaders,
+          _retry: true,
+        });
+      }
+
+      return response;
+    } catch (err) {
+      throw new Error(normalizeError(err));
+    }
+  };
+
+  if (isGet && requestKey) {
+    const promise = executeRequest().finally(() => {
+      inFlightRequests.delete(requestKey);
+    });
+    inFlightRequests.set(requestKey, promise);
+    return promise.then((res) => res.clone());
+  }
+
+  return executeRequest();
 }
 
 export async function logout(accessToken, refreshToken) {
@@ -255,6 +319,8 @@ export async function createUser(userData) {
     throw new Error(data.message || 'Failed to create user.');
   }
 
+  apiCacheStore.invalidatePattern('admin_users');
+  apiCacheStore.invalidatePattern('master_current_users');
   return data;
 }
 
@@ -272,13 +338,20 @@ export function storeSession(response) {
   }
 }
 
-export async function fetchUsers() {
-  const response = await authenticatedFetch(API.USERS);
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(data.message || 'Failed to fetch users.');
-  }
-  return data.data || data;
+export async function fetchUsers(bypassCache = false) {
+  const cacheKey = 'admin_users';
+  return apiCacheStore.fetchWithCache(
+    cacheKey,
+    async () => {
+      const response = await authenticatedFetch(API.USERS);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to fetch users.');
+      }
+      return data.data || data;
+    },
+    { ttlMs: 5 * 60 * 1000, bypassCache }
+  );
 }
 
 export async function updateUser(id, userData) {
@@ -290,6 +363,8 @@ export async function updateUser(id, userData) {
   if (!response.ok) {
     throw new Error(data.message || 'Failed to update user.');
   }
+  apiCacheStore.invalidatePattern('admin_users');
+  apiCacheStore.invalidatePattern('master_current_users');
   return data.data || data;
 }
 
@@ -301,6 +376,8 @@ export async function deleteUser(id) {
   if (!response.ok) {
     throw new Error(data.message || 'Failed to delete user.');
   }
+  apiCacheStore.invalidatePattern('admin_users');
+  apiCacheStore.invalidatePattern('master_current_users');
   return data;
 }
 
@@ -313,6 +390,8 @@ export async function assignManager(executiveId, managerId) {
   if (!response.ok) {
     throw new Error(data.message || 'Failed to assign manager.');
   }
+  apiCacheStore.invalidatePattern('admin_users');
+  apiCacheStore.invalidatePattern('master_current_users');
   return data;
 }
 

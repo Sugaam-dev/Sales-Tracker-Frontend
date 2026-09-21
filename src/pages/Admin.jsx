@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Mail, Edit2, Plus, Check, X, Trash2, Eye, EyeOff, Shield } from 'lucide-react';
+import { Users, Mail, Edit2, Plus, Check, X, Trash2, Eye, EyeOff, Shield, RefreshCw } from 'lucide-react';
 import { API, authHeaders } from '../api/config';
 import {
   createUser,
@@ -9,7 +9,9 @@ import {
   revokeLeaderDelegation,
   hasPermission,
 } from '../services/authService';
+import { normalizeError } from '../services/apiError';
 import { useToast, useConfirm } from '../context/FeedbackContext';
+import { SkeletonTable } from '../components/common/Skeleton';
 import './Admin.css';
 
 // ─── Reusable UI Components ──────────────────────────────────────────────────
@@ -93,38 +95,27 @@ export default function Admin({ user: propUser }) {
   const [userCreationError, setUserCreationError] = useState('');
   const [userCreationSuccess, setUserCreationSuccess] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [usersError, setUsersError] = useState(null);
 
   const loadUsers = async () => {
     if (!canViewUsers) return;
     setLoadingUsers(true);
+    setUsersError(null);
     try {
       const data = await fetchUsers();
       setUsers(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to load users:', err);
-      showToast(err.message || 'Failed to load users');
+      const errMsg = normalizeError(err, 'Failed to load users');
+      setUsersError(errMsg);
+      showToast(errMsg, 'error');
     } finally {
       setLoadingUsers(false);
     }
   };
 
   useEffect(() => {
-    if (!canViewUsers) return;
-    let isMounted = true;
-    fetchUsers()
-      .then((data) => {
-        if (isMounted) setUsers(Array.isArray(data) ? data : []);
-      })
-      .catch((err) => {
-        if (isMounted) {
-          console.error('Failed to load users:', err);
-          showToast(err.message || 'Failed to load users');
-        }
-      });
-
-    return () => {
-      isMounted = false;
-    };
+    loadUsers();
   }, [canViewUsers]);
 
   const toggleUser = async (user) => {
@@ -302,13 +293,15 @@ export default function Admin({ user: propUser }) {
 
   const handleToggleDelegation = async (leaderId, permission, currentGranted) => {
     setDelegationLoading(true);
+    const permObj = DELEGABLE_PERMISSIONS.find(p => p.key === permission);
+    const permLabel = permObj ? permObj.label : permission;
     try {
       if (currentGranted) {
         await revokeLeaderDelegation(leaderId, permission);
-        showToast(`Revoked ${permission}`);
+        showToast(`${permLabel} permission revoked.`);
       } else {
         await grantLeaderDelegation(leaderId, permission);
-        showToast(`Granted ${permission}`);
+        showToast(`${permLabel} permission granted.`);
       }
 
       // Update state in modal & list
@@ -391,8 +384,19 @@ export default function Admin({ user: propUser }) {
             </div>
 
             {loadingUsers ? (
-              <div style={{ padding: '32px', textAlign: 'center', color: 'var(--color-text-muted)' }}>
-                Loading team members...
+              <div style={{ padding: '16px' }}>
+                <SkeletonTable rows={5} columns={6} />
+              </div>
+            ) : usersError ? (
+              <div style={{ padding: '32px', textAlign: 'center', backgroundColor: '#FEF2F2', borderRadius: '8px', border: '1px solid #F87171', margin: '16px 0' }}>
+                <p style={{ color: '#DC2626', fontWeight: '500', margin: '0 0 12px 0', fontSize: '14px' }}>{usersError}</p>
+                <button
+                  onClick={loadUsers}
+                  className="btn-primary"
+                  style={{ padding: '6px 16px', fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <RefreshCw size={14} /> Retry
+                </button>
               </div>
             ) : (
               <div className="table-wrapper">
@@ -707,9 +711,6 @@ export default function Admin({ user: propUser }) {
                     <div className="delegation-perm-info">
                       <div className="delegation-perm-title">{p.label}</div>
                       <div className="delegation-perm-desc">{p.desc}</div>
-                      <div className="delegation-perm-badge-wrapper">
-                        <code className="delegation-perm-key">{p.key}</code>
-                      </div>
                     </div>
                   </div>
                 );

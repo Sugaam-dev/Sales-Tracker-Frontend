@@ -4,12 +4,18 @@ import { DollarSign, Percent, AlertCircle, CheckCircle2, X, Sparkles, RefreshCw,
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import KpiCard from '../components/KpiCard';
 import { initialLeadsData } from './mockLeads';
-import { fetchDashboardSummary, fetchLeads, fetchCurrentUsers, fetchTasks, createTask, updateTaskStatus, deleteTask } from '../services/leadService';
+import { fetchDashboardSummary, fetchLeads, fetchActivitiesFeed, fetchCurrentUsers, fetchTasks, createTask, updateTaskStatus, deleteTask } from '../services/leadService';
+import { normalizeError } from '../services/apiError';
+import { useToast } from '../context/FeedbackContext';
+import { useMasterData } from '../context/MasterDataContext';
+import { SkeletonCard, SkeletonChart, SkeletonBlock } from '../components/common/Skeleton';
 import './Dashboard.css';
 
 export default function Dashboard() {
   const [activeKpiModal, setActiveKpiModal] = useState(null);
   const navigate = useNavigate();
+  const showToast = useToast();
+  const { usersList: masterUsersList } = useMasterData();
 
   // API State
   const [loading, setLoading] = useState(true);
@@ -28,7 +34,7 @@ export default function Dashboard() {
   // Filters State
   const [ownerFilter, setOwnerFilter] = useState('');
   const [regionFilter, setRegionFilter] = useState('');
-  const [usersList, setUsersList] = useState([]);
+  const usersList = masterUsersList;
 
   const [isAiExpanded, setIsAiExpanded] = useState(() => {
     const saved = sessionStorage.getItem('isAiExpanded');
@@ -45,12 +51,6 @@ export default function Dashboard() {
     { icon: '🔥', text: 'High probability deals in Proposal & Negotiation ready for closing.', type: 'action', badge: 'Hot Deals' },
     { icon: '⚠️', text: 'Check overdue activities and follow-ups to maintain deal velocity.', type: 'alert', badge: 'Action Required' }
   ]);
-
-  useEffect(() => {
-    fetchCurrentUsers().then(resp => {
-      if (resp && resp.data) setUsersList(resp.data);
-    }).catch(err => console.error('Failed to load users for filter:', err));
-  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -105,6 +105,8 @@ export default function Dashboard() {
 
   // Task To-Do list state
   const [tasks, setTasks] = useState([]);
+  const [tasksLoading, setTasksLoading] = useState(true);
+  const [tasksError, setTasksError] = useState(null);
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [taskText, setTaskText] = useState('');
   const [taskDate, setTaskDate] = useState('');
@@ -116,6 +118,8 @@ export default function Dashboard() {
   }, []);
 
   const loadBackendTasks = async () => {
+    setTasksLoading(true);
+    setTasksError(null);
     try {
       const res = await fetchTasks();
       if (res && res.data) {
@@ -130,6 +134,9 @@ export default function Dashboard() {
       }
     } catch (err) {
       console.error('Failed to load tasks from backend:', err);
+      setTasksError(normalizeError(err, 'Failed to load tasks.'));
+    } finally {
+      setTasksLoading(false);
     }
   };
 
@@ -145,6 +152,7 @@ export default function Dashboard() {
       console.error('Failed to update task status:', err);
       // revert on error
       setTasks(prev => prev.map(t => t.id === id ? { ...t, completed: !newStatus } : t));
+      showToast(normalizeError(err, 'Failed to update task status'), 'error');
     }
   };
 
@@ -154,9 +162,11 @@ export default function Dashboard() {
 
     try {
       await deleteTask(id);
+      showToast('Task deleted successfully', 'success');
     } catch (err) {
       console.error('Failed to delete task:', err);
       setTasks(prevTasks);
+      showToast(normalizeError(err, 'Failed to delete task'), 'error');
     }
   };
 
@@ -207,10 +217,11 @@ export default function Dashboard() {
           completed: res.data.completed
         };
         setTasks(prev => [newTask, ...prev]);
+        showToast('Task created successfully', 'success');
       }
     } catch (err) {
       console.error('Failed to create task:', err);
-      alert('Failed to create task: ' + err.message);
+      showToast(normalizeError(err, 'Failed to create task'), 'error');
     }
 
     setTaskText('');
@@ -270,30 +281,43 @@ export default function Dashboard() {
   const handleKpiClick = async (title) => {
     try {
       if (title.includes('Total Pipeline')) {
-        const resp = await fetchLeads({ limit: 50 });
+        const query = { limit: 100 };
+        if (ownerFilter) query.owner = ownerFilter;
+        if (regionFilter) query.region = regionFilter;
+        const resp = await fetchLeads(query);
         const open = (resp.data || []).filter(l => l.status !== 'Won' && l.status !== 'Lost');
         const list = open.map(l => `${l.company} - $${(l.value || 0).toLocaleString()}`);
         setActiveKpiModal({ title: `${open.length} Open Deals ($${totalPipelineVal.toLocaleString()})`, data: list });
       } else if (title.includes('Expected Value')) {
-        const resp = await fetchLeads({ limit: 50 });
+        const query = { limit: 100 };
+        if (ownerFilter) query.owner = ownerFilter;
+        if (regionFilter) query.region = regionFilter;
+        const resp = await fetchLeads(query);
         const open = (resp.data || []).filter(l => l.status !== 'Won' && l.status !== 'Lost');
         const list = open.map(l => `${l.company} (${l.stage || 'Open'}) - $${(l.value || 0).toLocaleString()}`);
         setActiveKpiModal({ title: `Expected Value Breakdown ($${expectedPipelineVal.toLocaleString()})`, data: list });
       } else if (title.includes('Overdue Tasks')) {
-        const resp = await fetchLeads({ limit: 50 });
-        const open = (resp.data || []).filter(l => l.status !== 'Won' && l.status !== 'Lost');
-        const overdue = open.map(l => ({
-          id: l.leadId || `L-${l.id}`,
-          company: l.company,
-          owner: l.owner || 'Unassigned',
-          task: 'Follow-up Required',
-          dueDate: l.estimatedRequirementDate || l.nextFollowUp || 'Past Due',
-          overdue: 'Action Pending',
-          priority: l.priority || 'High'
+        const query = { due_status: 'overdue', limit: 100 };
+        if (ownerFilter) query.rep = ownerFilter;
+        if (regionFilter) query.geography = regionFilter;
+        const resp = await fetchActivitiesFeed(query);
+        const overdue = (resp.data || []).map(act => ({
+          id: act.leadId || `L-${act.id}`,
+          company: act.leadName || act.company || 'Unknown Lead',
+          owner: act.rep || 'Unassigned',
+          contact: act.leadName || 'Follow-up',
+          task: act.desc ? `${act.type}: ${act.desc}` : (act.type || 'Follow-up Required'),
+          dueDate: act.dueDate ? act.dueDate.replace('T', ' ').substring(0, 10) : 'Past Due',
+          overdue: 'Overdue',
+          priority: act.dealSize || 'High'
         }));
-        setActiveKpiModal({ title: `${overdue.length} Overdue Actions`, data: overdue });
+        const totalCount = resp.pagination?.total !== undefined ? resp.pagination.total : overdue.length;
+        setActiveKpiModal({ title: `${totalCount} Overdue Actions`, data: overdue });
       } else if (title.includes('Won Leads')) {
-        const resp = await fetchLeads({ stage: 'Closed Won', limit: 50 });
+        const query = { stage: 'Closed Won', limit: 100 };
+        if (ownerFilter) query.owner = ownerFilter;
+        if (regionFilter) query.region = regionFilter;
+        const resp = await fetchLeads(query);
         const list = (resp.data || []).map(l => ({
           id: l.leadId || `L-${l.id}`,
           company: l.company,
@@ -304,9 +328,13 @@ export default function Dashboard() {
           wonDate: l.updatedAt ? l.updatedAt.substring(0, 10) : 'Recent',
           duration: 'Closed'
         }));
-        setActiveKpiModal({ title: `${list.length} Won Leads`, data: list });
+        const totalCount = resp.pagination?.total !== undefined ? resp.pagination.total : list.length;
+        setActiveKpiModal({ title: `${totalCount} Won Leads`, data: list });
       } else if (title.includes('Closed Lost')) {
-        const resp = await fetchLeads({ stage: 'Closed Lost', limit: 50 });
+        const query = { stage: 'Closed Lost', limit: 100 };
+        if (ownerFilter) query.owner = ownerFilter;
+        if (regionFilter) query.region = regionFilter;
+        const resp = await fetchLeads(query);
         const list = (resp.data || []).map(l => ({
           id: l.leadId || `L-${l.id}`,
           company: l.company,
@@ -317,7 +345,8 @@ export default function Dashboard() {
           lostDate: l.updatedAt ? l.updatedAt.substring(0, 10) : 'Recent',
           reason: l.lostReason || 'Not Specified'
         }));
-        setActiveKpiModal({ title: `${list.length} Closed Lost Leads`, data: list });
+        const totalCount = resp.pagination?.total !== undefined ? resp.pagination.total : list.length;
+        setActiveKpiModal({ title: `${totalCount} Closed Lost Leads`, data: list });
       }
     } catch (err) {
       console.error('Failed to load drilldown data:', err);
@@ -326,7 +355,10 @@ export default function Dashboard() {
 
   const handleRegionClick = async (regionName) => {
     try {
-      const resp = await fetchLeads({ limit: 50 });
+      const query = { limit: 100 };
+      if (ownerFilter) query.owner = ownerFilter;
+      if (regionName) query.region = regionName;
+      const resp = await fetchLeads(query);
       const regionLeads = (resp.data || []).filter(l => l.region && l.region.toLowerCase() === regionName.toLowerCase()).map(l => ({
         id: l.leadId || `L-${l.id}`,
         company: l.company,
@@ -336,7 +368,7 @@ export default function Dashboard() {
         owner: l.owner || 'Unassigned'
       }));
       setActiveKpiModal({
-        title: `${regionName} Region - Lead List`,
+        title: `${regionName} Region - Lead List (${regionLeads.length})`,
         data: regionLeads
       });
     } catch (err) {
@@ -416,7 +448,12 @@ export default function Dashboard() {
 
         {/* KPI Cards */}
         <div className="kpi-grid">
-            {kpiData.map((kpi, index) => (
+            {loading ? (
+              Array.from({ length: 5 }).map((_, index) => (
+                <SkeletonCard key={index} height="130px" />
+              ))
+            ) : (
+              kpiData.map((kpi, index) => (
                 <KpiCard
                     key={index}
                     title={kpi.title}
@@ -426,7 +463,8 @@ export default function Dashboard() {
                     highlightColor={kpi.color}
                     onClick={() => handleKpiClick(kpi.title.trim())}
                 />
-            ))}
+              ))
+            )}
         </div>
 
         {/* AI Summary Card */}
@@ -583,33 +621,54 @@ export default function Dashboard() {
               )}
 
               <div className="todo-list-wrapper">
-                {tasks.map(task => (
-                  <div key={task.id} className={`todo-item ${task.completed ? 'completed' : ''}`}>
-                    <div className="todo-left">
-                      <input 
-                        type="checkbox" 
-                        className="todo-check-input"
-                        checked={task.completed} 
-                        onChange={() => handleToggleTask(task.id)}
-                      />
-                      <div className="todo-content-col">
-                        <span className="todo-text">{task.text}</span>
-                        <div className="todo-meta">
-                          <span>{task.date}</span>
-                          <span className={`todo-priority-badge ${task.priority.toLowerCase()}`}>{task.priority}</span>
+                {tasksLoading ? (
+                  <div style={{ padding: '24px', textAlign: 'center', color: 'var(--color-text-muted)', fontSize: '13px' }}>
+                    Loading tasks...
+                  </div>
+                ) : tasksError ? (
+                  <div style={{ padding: '16px', textAlign: 'center', backgroundColor: '#FEF2F2', borderRadius: '6px', border: '1px solid #FCA5A5' }}>
+                    <p style={{ color: '#DC2626', fontSize: '13px', margin: '0 0 8px 0', fontWeight: '500' }}>{tasksError}</p>
+                    <button
+                      onClick={loadBackendTasks}
+                      className="btn-primary"
+                      style={{ padding: '4px 12px', fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                    >
+                      <RefreshCw size={12} /> Retry
+                    </button>
+                  </div>
+                ) : tasks.length === 0 ? (
+                  <div style={{ padding: '20px', textAlign: 'center', color: 'var(--color-text-muted)', fontSize: '13px' }}>
+                    No tasks found. Click "Add Task" to create one.
+                  </div>
+                ) : (
+                  tasks.map(task => (
+                    <div key={task.id} className={`todo-item ${task.completed ? 'completed' : ''}`}>
+                      <div className="todo-left">
+                        <input 
+                          type="checkbox" 
+                          className="todo-check-input"
+                          checked={task.completed} 
+                          onChange={() => handleToggleTask(task.id)}
+                        />
+                        <div className="todo-content-col">
+                          <span className="todo-text">{task.text}</span>
+                          <div className="todo-meta">
+                            <span>{task.date}</span>
+                            <span className={`todo-priority-badge ${task.priority.toLowerCase()}`}>{task.priority}</span>
+                          </div>
                         </div>
                       </div>
+                      <div className="todo-actions">
+                        <button className="todo-icon-btn" onClick={() => handleStartEdit(task)} title="Edit Task">
+                          <Edit2 size={13} />
+                        </button>
+                        <button className="todo-icon-btn delete" onClick={() => handleDeleteTask(task.id)} title="Delete Task">
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
                     </div>
-                    <div className="todo-actions">
-                      <button className="todo-icon-btn" onClick={() => handleStartEdit(task)} title="Edit Task">
-                        <Edit2 size={13} />
-                      </button>
-                      <button className="todo-icon-btn delete" onClick={() => handleDeleteTask(task.id)} title="Delete Task">
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
         </div>
@@ -731,7 +790,7 @@ export default function Dashboard() {
                                                 {item.id}
                                             </span>
                                             <span className="status-badge badge-overdue">
-                                                {item.overdue} Overdue
+                                                {item.overdue || 'Overdue'}
                                             </span>
                                         </div>
                                         <div className="kpi-company">
