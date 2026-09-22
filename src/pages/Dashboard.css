@@ -86,16 +86,16 @@
     padding: 16px;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
-    background: var(--color-surface-subtle);
+    background: #FFFFFF;
     transition: all var(--transition-fast);
     cursor: pointer;
 }
 
 .task-item:hover {
-    background: var(--color-surface-hover);
-    border-color: #38BDF8;
+    background: var(--color-primary-subtle);
+    border-color: var(--color-primary-subtle-border);
     transform: translateY(-2px);
-    box-shadow: 0 6px 18px rgba(5, 12, 28, 0.4);
+    box-shadow: var(--shadow-md);
 }
 
 /* ===========================================================
@@ -224,12 +224,12 @@
     width: 720px;
     max-width: 94%;
     max-height: 85vh;
-    background: var(--color-surface);
+    background: #FFFFFF;
     border-radius: var(--radius-2xl);
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 24px 60px rgba(5, 12, 28, 0.8);
+    box-shadow: var(--shadow-xl);
     border: 1px solid var(--color-border);
     animation: modalPop .25s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -240,7 +240,7 @@
     align-items: center;
     padding: 20px 24px;
     border-bottom: 1px solid var(--color-border);
-    background: linear-gradient(135deg, #101F3E 0%, #1A2E5A 100%);
+    background: linear-gradient(135deg, #0F172A 0%, #1E3A8A 100%);
     color: #FFFFFF;
 }
 
@@ -286,11 +286,11 @@
     justify-content: flex-end;
     padding: 16px 24px;
     border-top: 1px solid var(--color-border);
-    background: var(--color-surface);
+    background: #FFFFFF;
 }
 
 .kpi-modal-card {
-    background: var(--color-surface-subtle);
+    background: #FFFFFF;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
     padding: 18px;
@@ -304,9 +304,8 @@
 
 .kpi-modal-card.interactive:hover {
     transform: translateY(-2px);
-    border-color: #38BDF8;
-    background: var(--color-surface-hover);
-    box-shadow: 0 6px 20px rgba(5, 12, 28, 0.4);
+    border-color: var(--color-primary);
+    box-shadow: var(--shadow-md), 0 0 0 1px rgba(37, 99, 235, 0.1);
 }
 
 .kpi-card-header {
@@ -389,7 +388,7 @@
    =========================================================== */
 
 .ai-summary-card {
-    background: linear-gradient(135deg, #3a5698 0%, #3a5698 0%, #3a5698 0%) !important;
+    background: linear-gradient(135deg, #0F172A 0%, #1E3A8A 45%, #1D4ED8 100%) !important;
     color: #FFFFFF !important;
     border: 1px solid rgba(255, 255, 255, 0.12) !important;
     position: relative;
@@ -525,7 +524,7 @@
     align-items: center;
     justify-content: space-between;
     padding: 12px 14px;
-    background: var(--color-surface-subtle);
+    background: var(--color-surface);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-xs);
@@ -534,14 +533,14 @@
 
 .todo-item:hover {
     transform: translateY(-1px);
-    box-shadow: 0 4px 14px rgba(5, 12, 28, 0.4);
-    border-color: #38BDF8;
-    background: var(--color-surface-hover);
+    box-shadow: var(--shadow-sm);
+    border-color: var(--color-primary-subtle-border);
+    background: #F8FAFC;
 }
 
 .todo-item.completed {
     opacity: 0.55;
-    background: rgba(14, 26, 54, 0.6);
+    background: #F8FAFC;
     border-color: var(--color-border-subtle);
 }
 

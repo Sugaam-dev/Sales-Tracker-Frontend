@@ -504,26 +504,21 @@ export default function Dashboard() {
                                 bottom: 5
                             }}
                         >
-                            <XAxis 
-                                type="number" 
-                                tick={{ fill: "#FFFFFF", fontSize: 12 }} 
-                                stroke="#8FA4C7"
-                            />
+                            <XAxis type="number" />
                             <YAxis
                                 dataKey="name"
                                 type="category"
                                 width={130}
                                 tick={{
-                                    fill: "#FFFFFF",
+                                    fill: "var(--color-text-muted)",
                                     fontSize: 12
                                 }}
-                                stroke="#8FA4C7"
                             />
                              <Tooltip
-                                cursor={{ fill: "rgba(37, 99, 235, 0.15)" }}
-                                contentStyle={{ backgroundColor: '#101F3E', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '8px', fontSize: '13px', color: '#FFFFFF', boxShadow: '0 8px 24px rgba(5, 12, 28, 0.6)' }}
-                                labelStyle={{ color: '#FFFFFF', fontWeight: 'bold' }}
-                                itemStyle={{ color: '#FFFFFF' }}
+                                cursor={{ fill: "rgba(226, 232, 240, 0.3)" }}
+                                contentStyle={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }}
+                                labelStyle={{ color: 'var(--color-text-main)', fontWeight: 'bold' }}
+                                itemStyle={{ color: 'var(--color-primary)' }}
                              />
                             <Bar
                                 dataKey="deals"
