@@ -19,6 +19,38 @@ export default function Sidebar({ user, onLogout }) {
 
   return (
     <aside className="sidebar">
+      {/* Ambient background waves matching dark navy theme */}
+      <div className="sidebar-waves-bg" aria-hidden="true">
+        <svg 
+          viewBox="0 0 260 260" 
+          fill="none" 
+          xmlns="http://www.w3.org/2000/svg" 
+          className="sidebar-svg-waves" 
+          preserveAspectRatio="none"
+        >
+          <path 
+            d="M0 90 C 70 140, 160 40, 260 110 L 260 260 L 0 260 Z" 
+            fill="url(#sidebarWave1)" 
+            opacity="0.5" 
+          />
+          <path 
+            d="M0 150 C 90 90, 170 180, 260 130 L 260 260 L 0 260 Z" 
+            fill="url(#sidebarWave2)" 
+            opacity="0.75" 
+          />
+          <defs>
+            <linearGradient id="sidebarWave1" x1="0" y1="60" x2="260" y2="260" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#1E40AF" />
+              <stop offset="1" stopColor="#0B1938" />
+            </linearGradient>
+            <linearGradient id="sidebarWave2" x1="0" y1="110" x2="260" y2="260" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#2563EB" />
+              <stop offset="1" stopColor="#061B4A" />
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+
       <div className="sidebar-header">
         <img
           src="/logo.png"
@@ -27,25 +59,25 @@ export default function Sidebar({ user, onLogout }) {
         />
       </div>
 
-      <nav className="sidebar-nav" style={{ paddingTop: '16px' }}>
+      <nav className="sidebar-nav">
         {navItems.map((item) => (
           <NavLink 
             key={item.name} 
             to={item.path} 
             className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
           >
-            {item.icon}
-            <span>{item.name}</span>
+            <span className="nav-icon">{item.icon}</span>
+            <span className="nav-label">{item.name}</span>
           </NavLink>
         ))}
       </nav>
 
       <div className="sidebar-footer">
         <div className="user-profile" onClick={() => setDropdownOpen(!dropdownOpen)}>
-          <div className="avatar">{user?.initials || 'U'}</div>
+          <div className="avatar">{user?.initials || 'DG'}</div>
           <div className="user-info">
-            <span className="user-name">{user?.name || 'User Name'}</span>
-            <span className="user-role">{user?.role || 'Role'}</span>
+            <span className="user-name">{user?.name || 'Debabrata Ghosh'}</span>
+            <span className="user-role">{user?.role || 'Admin'}</span>
           </div>
           <ChevronDown size={16} className={`chevron ${dropdownOpen ? 'open' : ''}`} />
         </div>

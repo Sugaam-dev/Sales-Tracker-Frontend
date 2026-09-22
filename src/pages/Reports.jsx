@@ -115,51 +115,51 @@ export default function Reports() {
   };
 
   const defaultStageColors = {
-    'Prospecting': '#93C5FD',
-    'Qualification': '#A7F3D0',
-    'Initial Discussion': '#99F6E4',
-    'Needs Analysis': '#FDE68A',
-    'Proposal': '#C7D2FE',
-    'Negotiation': '#FBCFE8',
-    'Closed Won': '#34D399',
-    'Closed Lost': '#F87171'
+    'Prospecting': '#60A5FA',
+    'Qualification': '#38BDF8',
+    'Initial Discussion': '#0EA5E9',
+    'Needs Analysis': '#3B82F6',
+    'Proposal': '#2563EB',
+    'Negotiation': '#1D4ED8',
+    'Closed Won': '#10B981',
+    'Closed Lost': '#EF4444'
   };
 
   const pipelineStageData = (reportsData.pipeline_by_stage || []).map(stg => ({
     name: stg.name,
     value: stg.value !== undefined ? stg.value : (stg.deals || 0),
-    fill: stg.fill || defaultStageColors[stg.name] || '#93C5FD'
+    fill: stg.fill || defaultStageColors[stg.name] || '#3B82F6'
   }));
 
   const regionColors = {
     'North America': '#1D4ED8',
-    'Europe': '#0EA5E9',
-    'EMEA': '#0EA5E9',
-    'Asia Pacific': '#14B8A6',
-    'APAC': '#14B8A6',
-    'LATAM': '#F59E0B',
-    'India': '#8B5CF6'
+    'Europe': '#2563EB',
+    'EMEA': '#3B82F6',
+    'Asia Pacific': '#0EA5E9',
+    'APAC': '#0EA5E9',
+    'LATAM': '#60A5FA',
+    'India': '#93C5FD'
   };
 
   const regionData = (reportsData.pipeline_by_region || []).map(r => ({
     name: r.name === 'Europe' ? 'EMEA' : r.name === 'Asia Pacific' ? 'APAC' : r.name,
     value: r.percent !== undefined ? r.percent : (r.value || 0),
-    fill: r.fill || regionColors[r.name] || '#6B7280'
+    fill: r.fill || regionColors[r.name] || '#2563EB'
   }));
 
   const activityColors = {
-    'Calls': '#10B981',
-    'Emails': '#3B82F6',
-    'Meetings': '#F59E0B',
-    'Demos': '#8B5CF6',
-    'Other': '#6B7280'
+    'Calls': '#2563EB',
+    'Emails': '#38BDF8',
+    'Meetings': '#10B981',
+    'Demos': '#6366F1',
+    'Other': '#94A3B8'
   };
 
   const activityData = (reportsData.activity_breakdown || []).map(act => ({
     name: act.name,
     value: act.percent !== undefined ? act.percent : (act.value || 0),
     count: act.count,
-    fill: act.fill || activityColors[act.name] || '#10B981'
+    fill: act.fill || activityColors[act.name] || '#2563EB'
   }));
 
   const repPerformanceData = (reportsData.rep_performance || []).map(rep => ({
@@ -329,13 +329,25 @@ export default function Reports() {
           <div className="chart-wrapper">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={pipelineStageData} margin={{ top: 10, right: 10, left: 30, bottom: 35 }}>
-                <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-30} textAnchor="end" height={70} />
-                <YAxis tickFormatter={formatCurrency} tick={{ fontSize: 11 }} />
+                <XAxis 
+                  dataKey="name" 
+                  tick={{ fontSize: 11, fill: '#FFFFFF' }} 
+                  stroke="#8FA4C7"
+                  interval={0} 
+                  angle={-30} 
+                  textAnchor="end" 
+                  height={70} 
+                />
+                <YAxis 
+                  tickFormatter={formatCurrency} 
+                  tick={{ fontSize: 11, fill: '#FFFFFF' }} 
+                  stroke="#8FA4C7"
+                />
                  <Tooltip 
                    formatter={(value) => `$${value.toLocaleString()}`} 
-                   contentStyle={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }}
-                   labelStyle={{ color: 'var(--color-text-main)', fontWeight: 'bold' }}
-                   itemStyle={{ color: 'var(--color-primary)' }}
+                   contentStyle={{ backgroundColor: '#101F3E', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '8px', fontSize: '13px', color: '#FFFFFF', boxShadow: '0 8px 24px rgba(5, 12, 28, 0.6)' }}
+                   labelStyle={{ color: '#FFFFFF', fontWeight: 'bold' }}
+                   itemStyle={{ color: '#FFFFFF' }}
                  />
                 <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                   {pipelineStageData.map((entry, index) => (
@@ -370,11 +382,17 @@ export default function Reports() {
                 </Pie>
                 <Tooltip 
                   formatter={(value) => `${value}%`} 
-                  contentStyle={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }}
-                  labelStyle={{ color: 'var(--color-text-main)', fontWeight: 'bold' }}
-                  itemStyle={{ color: 'var(--color-primary)' }}
+                  contentStyle={{ backgroundColor: '#101F3E', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '8px', fontSize: '13px', color: '#FFFFFF', boxShadow: '0 8px 24px rgba(5, 12, 28, 0.6)' }}
+                  labelStyle={{ color: '#FFFFFF', fontWeight: 'bold' }}
+                  itemStyle={{ color: '#FFFFFF' }}
                 />
-                <RechartsLegend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{ fontSize: '12px' }} />
+                <RechartsLegend 
+                  layout="vertical" 
+                  verticalAlign="middle" 
+                  align="right" 
+                  wrapperStyle={{ fontSize: '12px' }}
+                  formatter={(value) => <span style={{ color: '#FFFFFF' }}>{value}</span>}
+                />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -388,16 +406,30 @@ export default function Reports() {
           <div className="chart-wrapper">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={repPerformanceData} layout="vertical" margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
-                <XAxis type="number" tickFormatter={formatCurrency} tick={{ fontSize: 11 }} />
-                <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} width={60} />
-                <Tooltip 
-                  cursor={{ fill: 'rgba(226, 232, 240, 0.3)' }} 
-                  formatter={(value) => `$${value.toLocaleString()}`} 
-                  contentStyle={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }}
-                  labelStyle={{ color: 'var(--color-text-main)', fontWeight: 'bold' }}
-                  itemStyle={{ color: 'var(--color-primary)' }}
+                <XAxis 
+                  type="number" 
+                  tickFormatter={formatCurrency} 
+                  tick={{ fontSize: 11, fill: '#FFFFFF' }} 
+                  stroke="#8FA4C7"
                 />
-                <RechartsLegend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
+                <YAxis 
+                  dataKey="name" 
+                  type="category" 
+                  tick={{ fontSize: 11, fill: '#FFFFFF' }} 
+                  stroke="#8FA4C7"
+                  width={60} 
+                />
+                <Tooltip 
+                  cursor={{ fill: 'rgba(37, 99, 235, 0.15)' }} 
+                  formatter={(value) => `$${value.toLocaleString()}`} 
+                  contentStyle={{ backgroundColor: '#101F3E', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '8px', fontSize: '13px', color: '#FFFFFF', boxShadow: '0 8px 24px rgba(5, 12, 28, 0.6)' }}
+                  labelStyle={{ color: '#FFFFFF', fontWeight: 'bold' }}
+                  itemStyle={{ color: '#FFFFFF' }}
+                />
+                <RechartsLegend 
+                  wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }}
+                  formatter={(value) => <span style={{ color: '#FFFFFF' }}>{value}</span>}
+                />
                 <Bar dataKey="won" name="Won" stackId="a" fill="#10B981" />
                 <Bar dataKey="pipeline" name="Pipeline" stackId="a" fill="#3B82F6" />
                 <Bar dataKey="lost" name="Lost" stackId="a" fill="#EF4444" radius={[0, 4, 4, 0]} />
@@ -429,11 +461,17 @@ export default function Reports() {
                 </Pie>
                 <Tooltip 
                   formatter={(value) => `${value}%`} 
-                  contentStyle={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }}
-                  labelStyle={{ color: 'var(--color-text-main)', fontWeight: 'bold' }}
-                  itemStyle={{ color: 'var(--color-primary)' }}
+                  contentStyle={{ backgroundColor: '#101F3E', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '8px', fontSize: '13px', color: '#FFFFFF', boxShadow: '0 8px 24px rgba(5, 12, 28, 0.6)' }}
+                  labelStyle={{ color: '#FFFFFF', fontWeight: 'bold' }}
+                  itemStyle={{ color: '#FFFFFF' }}
                 />
-                <RechartsLegend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{ fontSize: '12px' }} />
+                <RechartsLegend 
+                  layout="vertical" 
+                  verticalAlign="middle" 
+                  align="right" 
+                  wrapperStyle={{ fontSize: '12px' }}
+                  formatter={(value) => <span style={{ color: '#FFFFFF' }}>{value}</span>}
+                />
               </PieChart>
             </ResponsiveContainer>
           </div>

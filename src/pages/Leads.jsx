@@ -28,7 +28,7 @@ export default function Leads() {
       setEditStatus(selectedLead.status || 'New');
     }
   }, [isEditModalOpen, selectedLead]);
-  const [leadsPerPage, setLeadsPerPage] = useState(5);
+  const [leadsPerPage, setLeadsPerPage] = useState(10);
   const [classificationLead, setClassificationLead] = useState(null);
   const [classStatus, setClassStatus] = useState('New');
   const [classStage, setClassStage] = useState('Qualification');
@@ -65,7 +65,7 @@ export default function Leads() {
   const [leadsError, setLeadsError] = useState('');
   const [pagination, setPagination] = useState({
     page: 1,
-    limit: 5,
+    limit: 10,
     total: 0,
     totalPages: 0,
   });
@@ -916,24 +916,88 @@ export default function Leads() {
           
           {/* Pagination Footer */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px', padding: '16px', borderTop: '1px solid var(--color-border)', flexWrap: 'wrap' }}>
-            <button onClick={handlePrevPage} disabled={currentPage === 1} className="btn-secondary" style={{ padding: '6px 12px', fontSize: '14px', border: 'none', background: 'transparent', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', color: currentPage === 1 ? 'var(--color-text-muted)' : 'var(--color-text-main)' }}>&larr; Previous</button>
-            <div style={{ display: 'flex', gap: '4px' }}>
-              {[...Array(totalPages || 0)].map((_, i) => (
-                <button 
-                  key={i} 
-                  onClick={() => setCurrentPage(i + 1)}
-                  style={{ 
-                    width: '32px', height: '32px', borderRadius: '4px', border: 'none', 
-                    backgroundColor: currentPage === i + 1 ? 'var(--color-primary)' : 'transparent',
-                    color: currentPage === i + 1 ? 'white' : 'var(--color-text-main)',
-                    cursor: 'pointer', fontWeight: '500'
-                  }}
-                >
-                  {i + 1}
-                </button>
-              ))}
+            <button 
+              onClick={handlePrevPage} 
+              disabled={currentPage === 1} 
+              className="btn-secondary" 
+              style={{ 
+                padding: '6px 12px', 
+                fontSize: '14px', 
+                border: 'none', 
+                background: 'transparent', 
+                cursor: currentPage === 1 ? 'not-allowed' : 'pointer', 
+                color: currentPage === 1 ? 'var(--color-text-muted)' : 'var(--color-text-main)' 
+              }}
+            >
+              &larr; Previous
+            </button>
+            <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+              {(() => {
+                const pages = [];
+                const maxButtons = 7;
+                if (!totalPages || totalPages <= 1) {
+                  return (
+                    <button 
+                      style={{ 
+                        width: '32px', height: '32px', borderRadius: '4px', border: 'none', 
+                        backgroundColor: 'var(--color-primary)', color: 'white', fontWeight: '500' 
+                      }}
+                    >
+                      1
+                    </button>
+                  );
+                }
+                if (totalPages <= maxButtons) {
+                  for (let i = 1; i <= totalPages; i++) pages.push(i);
+                } else {
+                  if (currentPage <= 4) {
+                    pages.push(1, 2, 3, 4, 5, '...', totalPages);
+                  } else if (currentPage >= totalPages - 3) {
+                    pages.push(1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+                  } else {
+                    pages.push(1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages);
+                  }
+                }
+                return pages.map((p, idx) => {
+                  if (p === '...') {
+                    return (
+                      <span key={`dots-${idx}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', color: 'var(--color-text-muted)', fontSize: '13px' }}>
+                        ...
+                      </span>
+                    );
+                  }
+                  return (
+                    <button 
+                      key={p} 
+                      onClick={() => setCurrentPage(p)}
+                      style={{ 
+                        width: '32px', height: '32px', borderRadius: '4px', border: 'none', 
+                        backgroundColor: currentPage === p ? 'var(--color-primary)' : 'transparent',
+                        color: currentPage === p ? 'white' : 'var(--color-text-main)',
+                        cursor: 'pointer', fontWeight: '500', transition: 'all 0.15s ease'
+                      }}
+                    >
+                      {p}
+                    </button>
+                  );
+                });
+              })()}
             </div>
-            <button onClick={handleNextPage} disabled={currentPage === (totalPages || 1)} className="btn-secondary" style={{ padding: '6px 12px', fontSize: '14px', border: 'none', background: 'transparent', cursor: currentPage === (totalPages || 1) ? 'not-allowed' : 'pointer', color: currentPage === (totalPages || 1) ? 'var(--color-text-muted)' : 'var(--color-text-main)' }}>Next &rarr;</button>
+            <button 
+              onClick={handleNextPage} 
+              disabled={currentPage === (totalPages || 1)} 
+              className="btn-secondary" 
+              style={{ 
+                padding: '6px 12px', 
+                fontSize: '14px', 
+                border: 'none', 
+                background: 'transparent', 
+                cursor: currentPage === (totalPages || 1) ? 'not-allowed' : 'pointer', 
+                color: currentPage === (totalPages || 1) ? 'var(--color-text-muted)' : 'var(--color-text-main)' 
+              }}
+            >
+              Next &rarr;
+            </button>
             
             <select
               value={leadsPerPage}
@@ -943,9 +1007,10 @@ export default function Leads() {
               }}
               style={{ padding: '6px 10px', fontSize: '13px', borderRadius: '4px', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-surface)', color: 'var(--color-text-main)' }}
             >
-              <option value={5}>5 per page</option>
               <option value={10}>10 per page</option>
               <option value={20}>20 per page</option>
+              <option value={50}>50 per page</option>
+              <option value={5}>5 per page</option>
             </select>
 
             <span style={{ color: 'var(--color-text-muted)', fontSize: '14px', marginLeft: '16px' }}>

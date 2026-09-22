@@ -227,22 +227,22 @@ export default function Dashboard() {
     setIsAddingTask(true);
   };
 
-  // Stage Colors Mapping
+  // Stage Colors Mapping (Modern Blue-Centric Palette)
   const defaultStageColors = {
-    'Prospecting': '#93C5FD',
-    'Qualification': '#A7F3D0',
-    'Initial Discussion': '#99F6E4',
-    'Needs Analysis': '#FDE68A',
-    'Proposal': '#C7D2FE',
-    'Negotiation': '#FBCFE8',
-    'Closed Won': '#34D399',
-    'Closed Lost': '#F87171'
+    'Prospecting': '#60A5FA',
+    'Qualification': '#38BDF8',
+    'Initial Discussion': '#0EA5E9',
+    'Needs Analysis': '#3B82F6',
+    'Proposal': '#2563EB',
+    'Negotiation': '#1D4ED8',
+    'Closed Won': '#10B981',
+    'Closed Lost': '#EF4444'
   };
 
   const pipelineStageData = (dashboardData.stage_distribution || []).map(stg => ({
     name: stg.name,
     deals: stg.deals !== undefined ? stg.deals : (stg.count || 0),
-    fill: stg.fill || defaultStageColors[stg.name] || '#93C5FD'
+    fill: stg.fill || defaultStageColors[stg.name] || '#3B82F6'
   }));
 
   const regions = (dashboardData.region_distribution || []).map(r => ({
@@ -260,11 +260,11 @@ export default function Dashboard() {
   const lostCount = dashboardData.lost_leads_count || 0;
 
   const kpiData = [
-    { title: 'Total Pipeline ', value: `$${totalPipelineVal.toLocaleString()}`, subtext: `${openDealsCount} open deals`, icon: <DollarSign size={18} />, color: '#1D4ED8' },
-    { title: 'Expected Value ', value: `$${expectedPipelineVal.toLocaleString()}`, subtext: 'Based on probability', icon: <Percent size={18} />, color: '#10B981' },
-    { title: 'Overdue Tasks ', value: `${overdueCount}`, subtext: 'Requires immediate action', icon: <AlertCircle size={18} />, color: '#EF4444' },
-    { title: 'Won Leads ', value: `${wonCount}`, subtext: 'Year to date', icon: <CheckCircle2 size={18} />, color: '#F59E0B' },
-    { title: 'Closed Lost ', value: `${lostCount}`, subtext: 'Year to date', icon: <X size={18} />, color: '#DC2626' }
+    { title: 'Total Pipeline', value: `$${totalPipelineVal.toLocaleString()}`, subtext: `${openDealsCount} open deals`, icon: <DollarSign size={18} />, color: '#2563EB' },
+    { title: 'Expected Value', value: `$${expectedPipelineVal.toLocaleString()}`, subtext: 'Based on probability', icon: <Percent size={18} />, color: '#0EA5E9' },
+    { title: 'Overdue Tasks', value: `${overdueCount}`, subtext: 'Requires immediate action', icon: <AlertCircle size={18} />, color: '#EF4444' },
+    { title: 'Won Leads', value: `${wonCount}`, subtext: 'Year to date', icon: <CheckCircle2 size={18} />, color: '#10B981' },
+    { title: 'Closed Lost', value: `${lostCount}`, subtext: 'Year to date', icon: <X size={18} />, color: '#64748B' }
   ];
 
   const handleKpiClick = async (title) => {
@@ -504,21 +504,26 @@ export default function Dashboard() {
                                 bottom: 5
                             }}
                         >
-                            <XAxis type="number" />
+                            <XAxis 
+                                type="number" 
+                                tick={{ fill: "#FFFFFF", fontSize: 12 }} 
+                                stroke="#8FA4C7"
+                            />
                             <YAxis
                                 dataKey="name"
                                 type="category"
                                 width={130}
                                 tick={{
-                                    fill: "var(--color-text-muted)",
+                                    fill: "#FFFFFF",
                                     fontSize: 12
                                 }}
+                                stroke="#8FA4C7"
                             />
                              <Tooltip
-                                cursor={{ fill: "rgba(226, 232, 240, 0.3)" }}
-                                contentStyle={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }}
-                                labelStyle={{ color: 'var(--color-text-main)', fontWeight: 'bold' }}
-                                itemStyle={{ color: 'var(--color-primary)' }}
+                                cursor={{ fill: "rgba(37, 99, 235, 0.15)" }}
+                                contentStyle={{ backgroundColor: '#101F3E', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '8px', fontSize: '13px', color: '#FFFFFF', boxShadow: '0 8px 24px rgba(5, 12, 28, 0.6)' }}
+                                labelStyle={{ color: '#FFFFFF', fontWeight: 'bold' }}
+                                itemStyle={{ color: '#FFFFFF' }}
                              />
                             <Bar
                                 dataKey="deals"

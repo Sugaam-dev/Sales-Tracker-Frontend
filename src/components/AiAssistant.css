@@ -6,13 +6,13 @@
   width: 60px;
   height: 60px;
   border-radius: var(--radius-full);
-  background: linear-gradient(135deg, #4F46E5, #0D9488);
+  background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
   border: none;
-  box-shadow: 0 8px 30px rgba(79, 70, 229, 0.4);
+  box-shadow: 0 8px 30px rgba(37, 99, 235, 0.45);
   cursor: pointer;
   z-index: 1100;
   transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.3s ease;
@@ -21,7 +21,7 @@
 
 .ai-floating-btn:hover {
   transform: scale(1.1);
-  box-shadow: 0 12px 35px rgba(79, 70, 229, 0.6), 0 0 15px rgba(13, 148, 136, 0.4);
+  box-shadow: 0 12px 35px rgba(37, 99, 235, 0.6), 0 0 15px rgba(56, 189, 248, 0.4);
 }
 
 .ai-floating-btn.active {
@@ -32,7 +32,7 @@
   position: absolute;
   inset: -2px;
   border-radius: var(--radius-full);
-  background: linear-gradient(135deg, #818CF8, #2DD4BF);
+  background: linear-gradient(135deg, #60A5FA, #38BDF8);
   z-index: -1;
   opacity: 0.5;
   filter: blur(4px);
@@ -86,7 +86,7 @@
 /* Chat Header */
 .chat-header {
   padding: 16px 20px;
-  background: linear-gradient(135deg, #1E1B4B, #0F172A);
+  background: linear-gradient(135deg, #1E3A8A 0%, #0F172A 100%);
   color: white;
   display: flex;
   justify-content: space-between;
@@ -103,11 +103,12 @@
   width: 32px;
   height: 32px;
   border-radius: var(--radius-full);
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(37, 99, 235, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #38BDF8;
+  color: #60A5FA;
 }
 
 .sparkle-svg {
