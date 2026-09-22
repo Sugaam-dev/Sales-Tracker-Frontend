@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import LeadProfile, { LIFECYCLE_PIPELINES } from './LeadProfile';
 import { X, Edit2, Trash2, Phone, Mail, Calendar, Download, Plus, MoreVertical, Sparkles, Calculator, RotateCcw } from 'lucide-react';
-import { fetchCurrentUsers, fetchMasterStages, fetchLeads, fetchLeadById, updateLead, createLead, deleteLead } from '../services/leadService';
+import { fetchLeads, fetchLeadById, updateLead, createLead, deleteLead } from '../services/leadService';
 import { useToast, useConfirm } from '../context/FeedbackContext';
+import { useMasterData } from '../context/MasterDataContext';
+import { SkeletonTable, SkeletonBlock } from '../components/common/Skeleton';
 import './Leads.css';
 
 import { initialLeadsData } from './mockLeads';
@@ -15,6 +17,8 @@ export default function Leads() {
   const { id: urlLeadId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+
+  const { usersList, stagesList } = useMasterData();
 
   const [selectedLead, setSelectedLead] = useState(null);
   const [isCreatingLead, setIsCreatingLead] = useState(false);
@@ -51,9 +55,6 @@ export default function Leads() {
   const [isEditing, setIsEditing] = useState(false);
   const [openMenuId, setOpenMenuId] = useState(null);
 
-  // API Integration states
-  const [usersList, setUsersList] = useState([]);
-  const [stagesList, setStagesList] = useState([]);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [ownerFilter, setOwnerFilter] = useState('');
@@ -61,7 +62,7 @@ export default function Leads() {
   const [priorityFilter, setPriorityFilter] = useState('');
   const [sortBy, setSortBy] = useState('createdAt');
   const [sortOrder, setSortOrder] = useState('desc');
-  const [leadsLoading, setLeadsLoading] = useState(false);
+  const [leadsLoading, setLeadsLoading] = useState(true);
   const [leadsError, setLeadsError] = useState('');
   const [pagination, setPagination] = useState({
     page: 1,
@@ -69,23 +70,6 @@ export default function Leads() {
     total: 0,
     totalPages: 0,
   });
-
-  // Fetch dropdown data on mount
-  useEffect(() => {
-    const loadDropdownData = async () => {
-      try {
-        const [usersRes, stagesRes] = await Promise.all([
-          fetchCurrentUsers(),
-          fetchMasterStages()
-        ]);
-        if (usersRes.success) setUsersList(usersRes.data || []);
-        if (stagesRes.success) setStagesList(stagesRes.data || []);
-      } catch (err) {
-        console.error('Failed to load filter dropdown lists:', err);
-      }
-    };
-    loadDropdownData();
-  }, []);
 
   // Debounce search input
   useEffect(() => {
@@ -306,7 +290,6 @@ export default function Leads() {
     const updatedCompany = e.target.elements.company.value;
     const updatedContact = e.target.elements.contact.value;
     const updatedStatus = e.target.elements.status.value;
-    const updatedValue = e.target.elements.value.value;
     const lostReasonInput = e.target.elements.lostReason;
     const updatedLostReason = lostReasonInput ? lostReasonInput.value : '';
 
@@ -327,7 +310,6 @@ export default function Leads() {
           contact: updatedContact, 
           status: updatedStatus,
           stage: autoMappedStage, 
-          value: updatedValue,
           lostReason: updatedStatus === 'Lost' ? updatedLostReason : (l.lostReason || l.reason || ''),
           history: [{ date: new Date().toISOString().split('T')[0], action: `Status updated to ${updatedStatus}`, user: 'You' }, ...(l.history || [])]
         } 
@@ -344,7 +326,6 @@ export default function Leads() {
         contact: updatedContact,
         status: updatedStatus,
         stage: autoMappedStage,
-        value: String(updatedValue).replace(/[^0-9.-]/g, ''),
         lostReason: updatedStatus === 'Lost' ? updatedLostReason : undefined,
       };
       await updateLead(selectedLead.id, payload);
@@ -774,17 +755,23 @@ export default function Leads() {
 
                     {/* Deal Value */}
                     <td className="font-semibold">
-                      {lead.value}
+                      {lead.value !== undefined && lead.value !== null && lead.value !== '' && Number(lead.value) > 0
+                        ? (String(lead.value).startsWith('$') ? lead.value : `$${Number(lead.value).toLocaleString()}`)
+                        : "-"}
                     </td>
 
                     {/* Expected Value */}
                     <td>
-                      {lead.commercial?.estDealValue || "-"}
+                      {lead.expectedValue !== undefined && lead.expectedValue !== null && lead.expectedValue !== '' && lead.value !== undefined && lead.value !== null && lead.value !== '' && Number(lead.value) > 0
+                        ? (String(lead.expectedValue).startsWith('$') ? lead.expectedValue : `$${Number(lead.expectedValue).toLocaleString()}`)
+                        : "-"}
                     </td>
 
                     {/* Next Follow-up */}
                     <td>
-                      {lead.estDate || "-"}
+                      {lead.nextFollowUp 
+                        ? lead.nextFollowUp.split('T')[0] 
+                        : "-"}
                     </td>
 
                     {/* Three Dot Action Dropdown */}
@@ -1065,7 +1052,16 @@ export default function Leads() {
               )}
               <div>
                 <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500' }}>Deal Value</label>
-                <input name="value" type="text" defaultValue={selectedLead.value} required style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)' }} />
+                <input 
+                  type="text" 
+                  value={selectedLead.value ? (String(selectedLead.value).startsWith('$') ? selectedLead.value : `$${Number(selectedLead.value).toLocaleString()}`) : 'Evaluated on Save Draft'} 
+                  disabled 
+                  readOnly 
+                  style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-bg-subtle, #f8fafc)', cursor: 'not-allowed' }} 
+                />
+                <small style={{ display: 'block', marginTop: '4px', color: 'var(--color-text-muted)' }}>
+                  Evaluated automatically from Commercial Estimation selling price upon saving draft.
+                </small>
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '16px' }}>
                 <button type="button" className="btn-secondary" onClick={() => setIsEditModalOpen(false)}>Cancel</button>
@@ -1438,8 +1434,8 @@ export default function Leads() {
                       <td>{l.owner}</td>
                       <td>{l.stage}</td>
                       <td><span className="badge badge-info">{l.priority}</span></td>
-                      <td className="font-semibold">{l.value}</td>
-                      <td>{l.commercial?.estDealValue || '-'}</td>
+                      <td className="font-semibold">{l.value && Number(l.value) > 0 ? (String(l.value).startsWith('$') ? l.value : `$${Number(l.value).toLocaleString()}`) : '-'}</td>
+                      <td>{l.expectedValue && l.value && Number(l.value) > 0 ? (String(l.expectedValue).startsWith('$') ? l.expectedValue : `$${Number(l.expectedValue).toLocaleString()}`) : '-'}</td>
                       <td>{l.estDate || '-'}</td>
                       <td><span className={`badge ${getStatusBadgeColor(l.status)}`}>{l.status}</span></td>
                       <td>

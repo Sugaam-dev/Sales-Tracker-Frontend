@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { X, AlertCircle } from 'lucide-react';
-import { fetchCurrentUsers } from '../services/leadService';
+import { useMasterData } from '../context/MasterDataContext';
+import { COUNTRY_CODES, getCountryObj } from '../constants/countries';
+import { validatePhoneNumber, getMaxPhoneDigits } from '../utils/phoneValidation';
 import './Modal.css';
 
 /**
@@ -66,73 +68,6 @@ function limitWords(text, maxWords = 200) {
 }
 
 /**
- * Returns maximum allowed phone number digits based on selected country code.
- */
-function getMaxPhoneDigits(countryCode) {
-  const country = String(countryCode || '').toUpperCase();
-  if (country.includes('IN') || country.includes('+91')) return 10;
-  if (country.includes('US') || country.includes('+1')) return 10;
-  if (country.includes('UK') || country.includes('GB') || country.includes('+44')) return 10;
-  if (country.includes('AE') || country.includes('+971')) return 9;
-  if (country.includes('SG') || country.includes('+65')) return 8;
-  return 15;
-}
-
-/**
- * International phone validator respecting selected country and leading zero rule.
- */
-function validatePhoneNumber(phone, countryCode) {
-  const trimmed = (phone || '').trim();
-  if (!trimmed) {
-    return { valid: false, message: 'Contact number is required.' };
-  }
-
-  // 1. Leading zero rule (never allow leading zero)
-  if (trimmed.startsWith('0')) {
-    return { valid: false, message: 'Phone number must not start with 0.' };
-  }
-
-  const digits = trimmed.replace(/\D/g, '');
-  if (!digits) {
-    return { valid: false, message: 'Enter a valid phone number.' };
-  }
-  if (digits.startsWith('0')) {
-    return { valid: false, message: 'Phone number must not start with 0.' };
-  }
-
-  // 2. Country-specific validation
-  const country = String(countryCode).toUpperCase();
-  if (country.includes('IN') || country.includes('+91')) {
-    if (digits.length !== 10) {
-      return { valid: false, message: 'Invalid phone number for the selected country.' };
-    }
-  } else if (country.includes('US') || country.includes('+1')) {
-    if (digits.length !== 10) {
-      return { valid: false, message: 'Invalid phone number for the selected country.' };
-    }
-  } else if (country.includes('UK') || country.includes('+44')) {
-    if (digits.length < 9 || digits.length > 10) {
-      return { valid: false, message: 'Invalid phone number for the selected country.' };
-    }
-  } else if (country.includes('AE') || country.includes('+971')) {
-    if (digits.length !== 9) {
-      return { valid: false, message: 'Invalid phone number for the selected country.' };
-    }
-  } else if (country.includes('SG') || country.includes('+65')) {
-    if (digits.length !== 8) {
-      return { valid: false, message: 'Invalid phone number for the selected country.' };
-    }
-  } else {
-    // International general rule
-    if (digits.length < 7 || digits.length > 15) {
-      return { valid: false, message: 'Enter a valid phone number.' };
-    }
-  }
-
-  return { valid: true, message: '' };
-}
-
-/**
  * Validates email address format supporting various domains (.com, .in, .org, .net, .co.uk, etc.)
  */
 function validateEmail(email) {
@@ -160,7 +95,7 @@ function validateField(name, value, allData) {
       if (!trimmed) return 'Company name is required.';
       return '';
     case 'phone':
-      return validatePhoneNumber(value, allData.countryCode).message;
+      return validatePhoneNumber(value, allData.countryCode, true, 'Contact number is required.').message;
     case 'email':
       return validateEmail(value).message;
     case 'requestType':
@@ -209,12 +144,19 @@ export default function QuickCreateLeadModal({
   onCreate,
 }) {
   const dialogRef = useRef(null);
+  const { usersList } = useMasterData();
   const [users, setUsers] = useState([]);
   const [formData, setFormData] = useState(initialFormData);
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState('');
+
+  useEffect(() => {
+    if (usersList && usersList.length > 0) {
+      setUsers(usersList);
+    }
+  }, [usersList]);
 
   const resetForm = () => {
     setFormData(initialFormData);
@@ -231,12 +173,6 @@ export default function QuickCreateLeadModal({
   useEffect(() => {
     if (isOpen) {
       dialogRef.current?.showModal();
-      // Fetch dynamic users when modal opens
-      fetchCurrentUsers().then(res => {
-        if (res.success && res.data) {
-          setUsers(res.data);
-        }
-      }).catch(err => console.error("Failed to fetch users", err));
     } else {
       dialogRef.current?.close();
     }
@@ -261,6 +197,10 @@ export default function QuickCreateLeadModal({
       const truncatedPhone = digitsOnly.slice(0, maxLen);
       updated = { ...formData, countryCode: val, phone: truncatedPhone };
       finalVal = val;
+    } else if (field === 'value') {
+      const cleanVal = val.replace(/[^0-9.]/g, '');
+      finalVal = cleanVal;
+      updated = { ...formData, [field]: cleanVal };
     } else if (field === 'requestDetails') {
       // Limit to max 200 words
       finalVal = limitWords(val, 200);
@@ -271,11 +211,13 @@ export default function QuickCreateLeadModal({
 
     setFormData(updated);
 
-    // If changing country code, immediately revalidate phone if non-empty
+    // If changing country code, immediately revalidate phone if non-empty or touched
     if (field === 'countryCode') {
       if (updated.phone) {
-        const phoneMsg = validatePhoneNumber(updated.phone, val).message;
+        const phoneMsg = validatePhoneNumber(updated.phone, val, true, 'Contact number is required.').message;
         setErrors(prev => ({ ...prev, phone: phoneMsg }));
+      } else if (touched.phone) {
+        setErrors(prev => ({ ...prev, phone: 'Contact number is required.' }));
       }
     }
 
@@ -305,7 +247,8 @@ export default function QuickCreateLeadModal({
       'requestDetails',
       'owner',
       'priority',
-      'status'
+      'status',
+      'value'
     ];
 
     const newErrors = {};
@@ -327,9 +270,8 @@ export default function QuickCreateLeadModal({
     if (hasError) return;
 
     // Extract country calling code
-    const rawCC = formData.countryCode || '+91';
-    const match = rawCC.match(/\+\d+/);
-    const callingCode = match ? match[0] : rawCC;
+    const countryObj = getCountryObj(formData.countryCode);
+    const callingCode = countryObj?.code || '+91';
 
     const submitData = {
       ...formData,
@@ -344,6 +286,7 @@ export default function QuickCreateLeadModal({
       priority: formData.priority,
       status: formData.status,
       estDate: formData.estDate,
+      value: formData.value ? formData.value.trim() : undefined,
     };
 
     try {
@@ -438,13 +381,13 @@ export default function QuickCreateLeadModal({
                   name="countryCode" 
                   value={formData.countryCode} 
                   onChange={e => handleChange('countryCode', e.target.value)}
-                  style={{ width: '100px', flexShrink: 0 }}
+                  style={{ width: '135px', flexShrink: 0 }}
                 >
-                  <option value="IN +91">IN +91</option>
-                  <option value="US +1">US +1</option>
-                  <option value="UK +44">UK +44</option>
-                  <option value="AE +971">AE +971</option>
-                  <option value="SG +65">SG +65</option>
+                  {COUNTRY_CODES.map(c => (
+                    <option key={`${c.iso}-${c.code}`} value={`${c.iso} ${c.code}`}>
+                      {c.flag} {c.iso} ({c.code})
+                    </option>
+                  ))}
                 </select>
                 <input
                   type="tel"

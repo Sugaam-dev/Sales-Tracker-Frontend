@@ -21,6 +21,7 @@ import {
   convertToUSD
 } from '../services/commercialService';
 import { useToast } from '../context/FeedbackContext';
+import { SkeletonCard, SkeletonTable, SkeletonChart, SkeletonBlock } from '../components/common/Skeleton';
 import './CommercialEstimation.css';
 
 const STANDARD_ROLES = [
@@ -53,7 +54,7 @@ const STANDARD_EXPENSE_TYPES = [
 const getRoleDropdownState = (role) => {
   const trimmed = (role || '').trim();
   if (!trimmed) {
-    return { role: STANDARD_ROLES[0], selectedRole: STANDARD_ROLES[0], customRole: '' };
+    return { role: '', selectedRole: '', customRole: '' };
   }
   const isStandard = STANDARD_ROLES.filter(r => r !== 'Other').includes(trimmed);
   return {
@@ -217,31 +218,31 @@ export default function CommercialEstimation() {
       onsiteDays,
       offshoreDays,
       totalManDays,
-      totalResourceCost: financialSummary?.totalResourceCost ?? totalResourceCost,
-      totalResourceRevenue: financialSummary?.totalResourceRevenue ?? totalResourceRevenue,
-      totalExpenses: financialSummary?.totalExpenses ?? totalExpenses,
-      totalProjectCost: financialSummary?.totalProjectCost ?? totalProjectCost,
-      calculatedSellingPrice: financialSummary?.calculatedSellingPrice ?? calculatedSellingPrice,
-      effectiveSellingPrice: financialSummary?.effectiveSellingPrice ?? effectiveSellingPrice,
-      grossProfit: financialSummary?.grossProfit ?? grossProfit,
-      marginPercent: financialSummary?.marginPercent ?? marginPercent,
-      roiPercent: financialSummary?.roiPercent ?? roiPercent,
-      breakEvenMonth: financialSummary?.breakEvenMonth ?? (breakEvenMonth || duration),
-      maximumCashOut: financialSummary?.maximumCashOut ?? maxCashOut,
-      npv: financialSummary?.npv ?? npv,
+      totalResourceCost,
+      totalResourceRevenue,
+      totalExpenses,
+      totalProjectCost,
+      calculatedSellingPrice,
+      effectiveSellingPrice,
+      grossProfit,
+      marginPercent,
+      roiPercent,
+      breakEvenMonth: breakEvenMonth || duration,
+      maximumCashOut: maxCashOut,
+      npv,
 
       // Aliases for compatibility
-      resourceCost: financialSummary?.totalResourceCost ?? totalResourceCost,
-      resourceRevenue: financialSummary?.totalResourceRevenue ?? totalResourceRevenue,
-      expenseCost: financialSummary?.totalExpenses ?? totalExpenses,
-      totalCost: financialSummary?.totalProjectCost ?? totalProjectCost,
-      sellingPrice: financialSummary?.effectiveSellingPrice ?? effectiveSellingPrice,
-      margin: financialSummary?.marginPercent ?? marginPercent,
-      roi: financialSummary?.roiPercent ?? roiPercent,
-      breakeven: financialSummary?.breakEvenMonth ?? (breakEvenMonth || duration),
-      maxCashOut: financialSummary?.maximumCashOut ?? maxCashOut,
+      resourceCost: totalResourceCost,
+      resourceRevenue: totalResourceRevenue,
+      expenseCost: totalExpenses,
+      totalCost: totalProjectCost,
+      sellingPrice: effectiveSellingPrice,
+      margin: marginPercent,
+      roi: roiPercent,
+      breakeven: breakEvenMonth || duration,
+      maxCashOut: maxCashOut,
     };
-  }, [resources, expenses, scenario, projectInfo.duration, financialSummary]);
+  }, [resources, expenses, scenario, projectInfo.duration]);
 
   // 7. Backend Analytics Data
   const [analyticsData, setAnalyticsData] = useState(null);
@@ -264,6 +265,7 @@ export default function CommercialEstimation() {
       clientName: leadCtx.company || prev.clientName,
       projectName: leadCtx.projectName || prev.projectName,
       salesExecutive: leadCtx.owner || prev.salesExecutive,
+      estimatedRequirementDate: leadCtx.estimatedRequirementDate || prev.estimatedRequirementDate,
       currency: activeCurrency,
       billingType: comm.billingType || prev.billingType,
       duration: comm.estimatedDurationMonths || prev.duration,
@@ -295,34 +297,7 @@ export default function CommercialEstimation() {
         };
       }));
     } else {
-      setResources([
-        { 
-          id: 'res-1', 
-          role: 'Senior Fullstack Developer', 
-          selectedRole: 'Senior Fullstack Developer', 
-          customRole: '', 
-          grade: 'L3', 
-          onsiteDays: 20, 
-          offshoreDays: 40, 
-          dailyCost: convertFromUSD(200, activeCurrency), 
-          billingRate: convertFromUSD(650, activeCurrency),
-          baseDailyCostUSD: 200,
-          baseBillingRateUSD: 650
-        },
-        { 
-          id: 'res-2', 
-          role: 'Junior / Mid Fullstack Developer', 
-          selectedRole: 'Junior / Mid Fullstack Developer', 
-          customRole: '', 
-          grade: 'L1', 
-          onsiteDays: 10, 
-          offshoreDays: 120, 
-          dailyCost: convertFromUSD(100, activeCurrency), 
-          billingRate: convertFromUSD(300, activeCurrency),
-          baseDailyCostUSD: 100,
-          baseBillingRateUSD: 300
-        }
-      ]);
+      setResources([]);
     }
 
     // Expenses with safe string IDs and canonical base USD tracking
@@ -341,24 +316,7 @@ export default function CommercialEstimation() {
         };
       }));
     } else {
-      setExpenses([
-        { 
-          id: 'exp-1', 
-          type: 'Travel', 
-          expenseType: 'Travel', 
-          cost: convertFromUSD(1500, activeCurrency), 
-          baseCostUSD: 1500, 
-          remarks: 'Client site visits' 
-        },
-        { 
-          id: 'exp-2', 
-          type: 'Cloud Hosting', 
-          expenseType: 'Cloud Hosting', 
-          cost: convertFromUSD(800, activeCurrency), 
-          baseCostUSD: 800, 
-          remarks: 'Infrastructure' 
-        }
-      ]);
+      setExpenses([]);
     }
 
     // Scenario
@@ -670,23 +628,22 @@ export default function CommercialEstimation() {
     setFinancialSummary(null);
     const activeCurrency = projectInfo.currency === 'select' ? 'USD' : projectInfo.currency;
     const baseDailyCostUSD = getGradeDailyCostUSD('L1');
-    const baseBillingRateUSD = 250;
     const nextId = `res-temp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     setResources(prev => [
       ...prev,
       { 
         id: nextId, 
-        role: 'Senior Fullstack Developer', 
-        selectedRole: 'Senior Fullstack Developer',
+        role: '', 
+        selectedRole: '',
         customRole: '',
         grade: 'L1', 
-        onsiteDays: 0, 
-        offshoreDays: 80, 
+        onsiteDays: '', 
+        offshoreDays: '', 
         dailyCost: convertFromUSD(baseDailyCostUSD, activeCurrency), 
-        billingRate: convertFromUSD(baseBillingRateUSD, activeCurrency),
+        billingRate: '',
         baseDailyCostUSD,
-        baseBillingRateUSD,
-        totalDays: 80,
+        baseBillingRateUSD: 0,
+        totalDays: 0,
         totalCost: 0,
         totalRevenue: 0
       }
@@ -733,8 +690,8 @@ export default function CommercialEstimation() {
       ...prev,
       { 
         id: nextId, 
-        type: 'Travel', 
-        expenseType: 'Travel', 
+        type: '', 
+        expenseType: '', 
         customType: '', 
         cost: '', 
         baseCostUSD: 0, 
@@ -893,7 +850,7 @@ export default function CommercialEstimation() {
         manualSellingPrice: scenario.useManualPrice && Number(scenario.manualSellingPrice) > 0 ? Number(scenario.manualSellingPrice) : null,
         status: statusOverride || projectInfo.status || 'DRAFT',
         resources: resources.map(r => ({
-          role: (r.selectedRole === 'Other' ? (r.customRole?.trim() || 'Other') : (r.selectedRole || r.role || 'Senior Fullstack Developer')).trim(),
+          role: (r.selectedRole === 'Other' ? (r.customRole?.trim() || 'Other') : (r.selectedRole || r.role || '')).trim(),
           grade: r.grade || 'L1',
           onsiteDays: Number(r.onsiteDays) || 0,
           offshoreDays: Number(r.offshoreDays) || 0,
@@ -901,7 +858,7 @@ export default function CommercialEstimation() {
           billingRate: Number(r.billingRate) || 0
         })),
         expenses: expenses.map(e => ({
-          expenseType: (e.expenseType === 'Other' ? (e.customType?.trim() || 'Other') : (e.expenseType || e.type || 'Miscellaneous')).trim(),
+          expenseType: (e.expenseType === 'Other' ? (e.customType?.trim() || 'Other') : (e.expenseType || e.type || '')).trim(),
           cost: Number(e.cost) || 0,
           remarks: e.remarks ? String(e.remarks) : null
         })),
@@ -1024,9 +981,21 @@ ${resources.map(r => `- ${r.role} (${r.grade}): ${(Number(r.onsiteDays) || 0) + 
 
   if (loading) {
     return (
-      <div className="estimation-container" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: '16px' }}>
-        <Loader2 size={40} className="animate-spin" style={{ color: '#1D4ED8', animation: 'spin 1s linear infinite' }} />
-        <p style={{ color: 'var(--color-text-muted)', fontSize: '16px' }}>Loading Commercial Estimation for {leadId}...</p>
+      <div className="estimation-container" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <SkeletonBlock width="300px" height="2rem" />
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <SkeletonBlock width="120px" height="2.25rem" borderRadius="6px" />
+            <SkeletonBlock width="120px" height="2.25rem" borderRadius="6px" />
+          </div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+          <SkeletonCard height="120px" />
+          <SkeletonCard height="120px" />
+          <SkeletonCard height="120px" />
+          <SkeletonCard height="120px" />
+        </div>
+        <SkeletonTable rows={4} columns={6} />
       </div>
     );
   }
@@ -1169,6 +1138,12 @@ ${resources.map(r => `- ${r.role} (${r.grade}): ${(Number(r.onsiteDays) || 0) + 
             <label>Est End Date</label>
             <input type="date" value={projectInfo.endDate} onChange={(e) => handleProjectInfoChange('endDate', e.target.value)} />
           </div>
+          {projectInfo.estimatedRequirementDate && (
+            <div className="form-field">
+              <label>Client Est. Requirement Date</label>
+              <input type="date" value={projectInfo.estimatedRequirementDate} readOnly style={{ backgroundColor: '#F8FAFC', color: 'var(--color-text-muted)' }} />
+            </div>
+          )}
         </div>
       </div>
 
@@ -1204,9 +1179,10 @@ ${resources.map(r => `- ${r.role} (${r.grade}): ${(Number(r.onsiteDays) || 0) + 
                   <tr key={r.id}>
                     <td className="role-column">
                       <select 
-                        value={r.selectedRole || 'Senior Fullstack Developer'} 
+                        value={r.selectedRole || ''} 
                         onChange={(evt) => handleResourceChange(r.id, 'selectedRole', evt.target.value)}
                       >
+                        <option value="" disabled>Select Role</option>
                         {STANDARD_ROLES.map(role => (
                           <option key={role} value={role}>{role}</option>
                         ))}
@@ -1290,7 +1266,7 @@ ${resources.map(r => `- ${r.role} (${r.grade}): ${(Number(r.onsiteDays) || 0) + 
             </thead>
             <tbody>
               {expenses.map((expense) => {
-                const currentType = expense.expenseType || expense.type || 'Travel';
+                const currentType = expense.expenseType || expense.type || '';
                 const isCustomType = currentType === 'Other' || (!STANDARD_EXPENSE_TYPES.includes(currentType) && currentType !== '');
                 return (
                   <tr key={expense.id}>
@@ -1299,6 +1275,7 @@ ${resources.map(r => `- ${r.role} (${r.grade}): ${(Number(r.onsiteDays) || 0) + 
                         value={isCustomType ? 'Other' : currentType}
                         onChange={(evt) => handleExpenseChange(expense.id, 'expenseType', evt.target.value)}
                       >
+                        <option value="" disabled>Select Expense Type</option>
                         {STANDARD_EXPENSE_TYPES.map(t => (
                           <option key={t} value={t}>{t}</option>
                         ))}
@@ -1368,7 +1345,7 @@ ${resources.map(r => `- ${r.role} (${r.grade}): ${(Number(r.onsiteDays) || 0) + 
             </div>
             <div className="kpi-info-wrapper">
               <span className="kpi-val">{Math.round(totals.effectiveSellingPrice).toLocaleString()}</span>
-              <span className="kpi-lbl">Effective Selling Price</span>
+              <span className="kpi-lbl">Effective Selling Price (Deal Value)</span>
             </div>
           </div>
 

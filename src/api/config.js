@@ -21,6 +21,7 @@ export const API = {
   SEND_EMAIL: `${BASE_URL}/email/send`,
   CURRENT_USERS: `${BASE_URL}/current_users/`,
   LEADS: `${BASE_URL}/leads`,
+  IMPORT_DOCUMENT: `${BASE_URL}/leads/import/document`,
   TASKS: `${BASE_URL}/tasks`,
   HEAT_MAP: `${BASE_URL}/reports/heat-map`,
   COMMERCIAL: (leadId) => `${BASE_URL}/leads/${leadId}/commercial`,
