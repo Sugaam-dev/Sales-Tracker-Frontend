@@ -32,13 +32,15 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { 
   fetchLeads, 
-  fetchCurrentUsers, 
   fetchActivitiesFeed, 
   fetchActivitiesSummary, 
   logGlobalActivity,
   completeActivity 
 } from '../services/leadService';
+import { normalizeError } from '../services/apiError';
 import { useToast } from '../context/FeedbackContext';
+import { useMasterData } from '../context/MasterDataContext';
+import { SkeletonCard, SkeletonBlock, SkeletonText } from '../components/common/Skeleton';
 import './Activities.css';
 
 // Helper to determine icon and color class for activity types
@@ -112,6 +114,7 @@ Best regards,\nPMRG Sales Team`
 ];
 
 export default function Activities() {
+  const { usersList: masterUsersList } = useMasterData();
   const showToast = useToast();
   const navigate = useNavigate();
 
@@ -125,9 +128,10 @@ export default function Activities() {
   
   // Data states
   const [leadsList, setLeadsList] = useState([]);
-  const [usersList, setUsersList] = useState([]);
+  const usersList = masterUsersList;
   const [activitiesData, setActivitiesData] = useState([]);
-  const [activitiesLoading, setActivitiesLoading] = useState(false);
+  const [activitiesLoading, setActivitiesLoading] = useState(true);
+  const [activitiesError, setActivitiesError] = useState(null);
   const [typeCounts, setTypeCounts] = useState({
     all: 0,
     call: 0,
@@ -225,54 +229,54 @@ export default function Activities() {
     sessionStorage.setItem('isAiExpanded_activities', JSON.stringify(isAiExpanded));
   }, [isAiExpanded]);
 
-  // Load Initial Users & Leads for dropdown options
+  // Parallelized initial data loading on mount
   useEffect(() => {
-    const loadDropdownData = async () => {
+    let isMounted = true;
+    const loadInitialData = async () => {
       try {
-        const [leadsRes, usersRes] = await Promise.allSettled([
+        const [leadsRes, summaryRes] = await Promise.all([
           fetchLeads({ limit: 100 }),
-          fetchCurrentUsers(),
+          fetchActivitiesSummary()
         ]);
-        if (leadsRes.status === 'fulfilled') {
-          const val = leadsRes.value;
-          const lData = val?.data || val?.leads || (Array.isArray(val) ? val : []);
-          if (Array.isArray(lData) && lData.length > 0) {
-            setLeadsList(lData);
+        if (isMounted) {
+          if (leadsRes) {
+            const lData = leadsRes.data || leadsRes.leads || (Array.isArray(leadsRes) ? leadsRes : []);
+            if (Array.isArray(lData) && lData.length > 0) {
+              setLeadsList(lData);
+            }
           }
-        }
-        if (usersRes.status === 'fulfilled') {
-          const val = usersRes.value;
-          const uData = val?.data || val?.users || (Array.isArray(val) ? val : []);
-          if (Array.isArray(uData) && uData.length > 0) {
-            setUsersList(uData);
+          if (summaryRes) {
+            const sData = summaryRes.data || summaryRes;
+            if (sData) {
+              setSummaryData(sData);
+            }
           }
         }
       } catch (err) {
-        console.error('Failed to load dropdown options:', err);
+        console.error('Failed to load initial activities data:', err);
       }
     };
-    loadDropdownData();
+    loadInitialData();
+    return () => { isMounted = false; };
   }, []);
 
   // Fetch Activities Summary Metrics
   const loadSummary = useCallback(async () => {
     try {
       const res = await fetchActivitiesSummary();
-      if (res.success && res.data) {
-        setSummaryData(res.data);
+      const sData = res?.data || res;
+      if (sData) {
+        setSummaryData(sData);
       }
     } catch (err) {
       console.error('Failed to load activities summary:', err);
     }
   }, []);
 
-  useEffect(() => {
-    loadSummary();
-  }, [loadSummary]);
-
   // Fetch Activities Feed from Backend with Filters & Pagination
   const loadActivitiesFeed = useCallback(async () => {
     setActivitiesLoading(true);
+    setActivitiesError(null);
     try {
       const query = {
         page: currentPage,
@@ -335,6 +339,7 @@ export default function Activities() {
       }
     } catch (err) {
       console.error('Failed to load activities feed:', err);
+      setActivitiesError(normalizeError(err, 'Failed to load activity feed.'));
     } finally {
       setActivitiesLoading(false);
     }
@@ -1074,6 +1079,17 @@ export default function Activities() {
           {activitiesLoading ? (
             <div style={{ padding: '32px', textAlign: 'center', color: 'var(--color-text-muted)' }}>
               Loading activities...
+            </div>
+          ) : activitiesError ? (
+            <div style={{ padding: '24px', textAlign: 'center', backgroundColor: '#FEF2F2', borderRadius: '8px', border: '1px solid #F87171', margin: '16px 0' }}>
+              <p style={{ color: '#DC2626', fontWeight: '500', margin: '0 0 12px 0', fontSize: '14px' }}>{activitiesError}</p>
+              <button 
+                onClick={loadActivitiesFeed}
+                className="btn-primary"
+                style={{ padding: '6px 16px', fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+              >
+                <RefreshCw size={14} /> Retry
+              </button>
             </div>
           ) : activitiesData.length > 0 ? (
             activitiesData.map(activity => {
