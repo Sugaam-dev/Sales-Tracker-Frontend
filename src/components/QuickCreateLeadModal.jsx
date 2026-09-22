@@ -6,14 +6,65 @@ import { validatePhoneNumber, getMaxPhoneDigits } from '../utils/phoneValidation
 import './Modal.css';
 
 /**
- * Whitespace-based word counter handling normal spaces, multiple spaces,
- * leading/trailing spaces, tabs, and newlines.
+ * Accurately counts words respecting whitespace (\s+) as well as
+ * punctuation-adjacent words without spaces (e.g. "end.Start", "one,two").
  */
 function countWords(text) {
   if (!text || typeof text !== 'string') return 0;
   const trimmed = text.trim();
   if (!trimmed) return 0;
-  return trimmed.split(/\s+/).filter(Boolean).length;
+  return trimmed
+    .split(/\s+|(?<=[.!?,\;:/])(?=[a-zA-Z0-9])/)
+    .filter(Boolean).length;
+}
+
+/**
+ * Limits text to a maximum word count (e.g. 200 words).
+ * Prevents adding extra words via whitespace or punctuation concatenation (e.g. "word.WeWe").
+ */
+function limitWords(text, maxWords = 200) {
+  if (!text || typeof text !== 'string') return '';
+  const trimmed = text.trim();
+  if (!trimmed) return text;
+
+  const words = trimmed
+    .split(/\s+|(?<=[.!?,\;:/])(?=[a-zA-Z0-9])/)
+    .filter(Boolean);
+
+  if (words.length <= maxWords) {
+    // If at maxWords, prevent the last word from growing excessively long
+    if (words.length === maxWords) {
+      const lastWord = words[words.length - 1];
+      if (lastWord.length > 35) {
+        return text.slice(0, text.length - (lastWord.length - 35));
+      }
+    }
+    return text;
+  }
+
+  // If words exceed maxWords, slice back to the exact end of the maxWords-th word
+  let currentCount = 0;
+  let cutIndex = text.length;
+
+  const regex = /\S+/g;
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    const subWords = match[0].split(/(?<=[.!?,\;:/])(?=[a-zA-Z0-9])/).filter(Boolean);
+    currentCount += subWords.length;
+
+    if (currentCount >= maxWords) {
+      if (currentCount === maxWords) {
+        cutIndex = match.index + match[0].length;
+      } else {
+        const allowedInToken = maxWords - (currentCount - subWords.length);
+        const retainedSub = subWords.slice(0, allowedInToken).join('');
+        cutIndex = match.index + retainedSub.length;
+      }
+      break;
+    }
+  }
+
+  return text.slice(0, cutIndex);
 }
 
 /**
@@ -150,6 +201,10 @@ export default function QuickCreateLeadModal({
       const cleanVal = val.replace(/[^0-9.]/g, '');
       finalVal = cleanVal;
       updated = { ...formData, [field]: cleanVal };
+    } else if (field === 'requestDetails') {
+      // Limit to max 200 words
+      finalVal = limitWords(val, 200);
+      updated = { ...formData, [field]: finalVal };
     } else {
       updated = { ...formData, [field]: val };
     }
@@ -388,17 +443,17 @@ export default function QuickCreateLeadModal({
 
             {/* 6. Request Details (Right Column, replaces Product / Service) */}
             <div className="form-group">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                <label style={{ margin: 0 }}>
+              <div className="form-header-row">
+                <label>
                   Request Details <span className="required">*</span>
                 </label>
                 <span 
                   className="word-counter"
                   style={{ 
-                    color: (currentWordCount < 10 || currentWordCount > 200) ? 'var(--color-text-muted)' : '#10b981'
+                    color: currentWordCount < 10 ? 'var(--color-text-muted)' : (currentWordCount === 200 ? '#2563eb' : '#10b981')
                   }}
                 >
-                  {currentWordCount} / 200 words {currentWordCount < 10 && <span style={{ fontSize: '10px' }}>(at least 10 words required)</span>}
+                  {currentWordCount} / 200 words
                 </span>
               </div>
               <textarea

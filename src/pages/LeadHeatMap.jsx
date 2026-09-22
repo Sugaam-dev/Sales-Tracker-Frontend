@@ -414,12 +414,12 @@ export default function LeadHeatMap() {
             <div style={{ overflowX: 'auto', flex: 1 }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                 <thead>
-                  <tr style={{ borderBottom: '2px solid #E2E8F0', background: '#F8FAFC' }}>
-                    <th style={{ padding: '10px 12px', fontSize: '11px', fontWeight: '600', color: '#475569', textTransform: 'uppercase' }}>Lead ID</th>
-                    <th style={{ padding: '10px 12px', fontSize: '11px', fontWeight: '600', color: '#475569', textTransform: 'uppercase' }}>Company</th>
-                    <th style={{ padding: '10px 12px', fontSize: '11px', fontWeight: '600', color: '#475569', textTransform: 'uppercase' }}>Contact</th>
-                    <th style={{ padding: '10px 12px', fontSize: '11px', fontWeight: '600', color: '#475569', textTransform: 'uppercase' }}>Owner</th>
-                    <th style={{ padding: '10px 12px', fontSize: '11px', fontWeight: '600', color: '#475569', textTransform: 'uppercase' }}>Value</th>
+                  <tr style={{ borderBottom: '1px solid var(--color-border)', background: 'var(--color-surface-subtle)' }}>
+                    <th style={{ padding: '10px 12px', fontSize: '11px', fontWeight: '600', color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Lead ID</th>
+                    <th style={{ padding: '10px 12px', fontSize: '11px', fontWeight: '600', color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Company</th>
+                    <th style={{ padding: '10px 12px', fontSize: '11px', fontWeight: '600', color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Contact</th>
+                    <th style={{ padding: '10px 12px', fontSize: '11px', fontWeight: '600', color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Owner</th>
+                    <th style={{ padding: '10px 12px', fontSize: '11px', fontWeight: '600', color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Value</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -432,15 +432,15 @@ export default function LeadHeatMap() {
                           setShowAllLeads(false);
                           navigate('/leads', { state: { selectedLeadId: l.id } });
                         }}
-                        style={{ borderBottom: '1px solid #E2E8F0', cursor: 'pointer', transition: 'background 0.2s' }}
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
-                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                        style={{ borderBottom: '1px solid var(--color-border)', cursor: 'pointer', transition: 'background 0.2s', backgroundColor: 'var(--color-surface)' }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-surface-hover)'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--color-surface)'}
                       >
                         <td style={{ padding: '12px', fontSize: '13px', fontWeight: '600', color: 'var(--color-primary)' }}>L-{l.id.toString().padStart(4, '0')}</td>
-                        <td style={{ padding: '12px', fontSize: '13px', fontWeight: '700', color: '#0F172A' }}>{l.company}</td>
-                        <td style={{ padding: '12px', fontSize: '13px', color: '#475569' }}>{l.contact}</td>
-                        <td style={{ padding: '12px', fontSize: '13px', color: '#475569' }}>{l.owner}</td>
-                        <td style={{ padding: '12px', fontSize: '13px', fontWeight: '600', color: '#0F172A' }}>{l.value}</td>
+                        <td style={{ padding: '12px', fontSize: '13px', fontWeight: '700', color: 'var(--color-text-main)' }}>{l.company}</td>
+                        <td style={{ padding: '12px', fontSize: '13px', color: 'var(--color-text-muted)' }}>{l.contact}</td>
+                        <td style={{ padding: '12px', fontSize: '13px', color: 'var(--color-text-muted)' }}>{l.owner}</td>
+                        <td style={{ padding: '12px', fontSize: '13px', fontWeight: '600', color: 'var(--color-text-main)' }}>{l.value}</td>
                       </tr>
                     ))
                   ) : (

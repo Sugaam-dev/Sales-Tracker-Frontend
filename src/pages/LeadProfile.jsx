@@ -30,14 +30,65 @@ function validateEmail(val) {
 }
 
 /**
- * Whitespace-based word counter handling normal spaces, multiple spaces,
- * leading/trailing spaces, tabs, and newlines.
+ * Accurately counts words respecting whitespace (\s+) as well as
+ * punctuation-adjacent words without spaces (e.g. "end.Start", "one,two").
  */
 function countWords(text) {
   if (!text || typeof text !== 'string') return 0;
   const trimmed = text.trim();
   if (!trimmed) return 0;
-  return trimmed.split(/\s+/).filter(Boolean).length;
+  return trimmed
+    .split(/\s+|(?<=[.!?,\;:/])(?=[a-zA-Z0-9])/)
+    .filter(Boolean).length;
+}
+
+/**
+ * Limits text to a maximum word count (e.g. 200 words).
+ * Prevents adding extra words via whitespace or punctuation concatenation (e.g. "word.WeWe").
+ */
+function limitWords(text, maxWords = 200) {
+  if (!text || typeof text !== 'string') return '';
+  const trimmed = text.trim();
+  if (!trimmed) return text;
+
+  const words = trimmed
+    .split(/\s+|(?<=[.!?,\;:/])(?=[a-zA-Z0-9])/)
+    .filter(Boolean);
+
+  if (words.length <= maxWords) {
+    // If at maxWords, prevent the last word from growing excessively long
+    if (words.length === maxWords) {
+      const lastWord = words[words.length - 1];
+      if (lastWord.length > 35) {
+        return text.slice(0, text.length - (lastWord.length - 35));
+      }
+    }
+    return text;
+  }
+
+  // If words exceed maxWords, slice back to the exact end of the maxWords-th word
+  let currentCount = 0;
+  let cutIndex = text.length;
+
+  const regex = /\S+/g;
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    const subWords = match[0].split(/(?<=[.!?,\;:/])(?=[a-zA-Z0-9])/).filter(Boolean);
+    currentCount += subWords.length;
+
+    if (currentCount >= maxWords) {
+      if (currentCount === maxWords) {
+        cutIndex = match.index + match[0].length;
+      } else {
+        const allowedInToken = maxWords - (currentCount - subWords.length);
+        const retainedSub = subWords.slice(0, allowedInToken).join('');
+        cutIndex = match.index + retainedSub.length;
+      }
+      break;
+    }
+  }
+
+  return text.slice(0, cutIndex);
 }
 
 /**
@@ -355,7 +406,7 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
   };
 
   const handleRequestDetailsChange = (e) => {
-    const val = e.target.value;
+    const val = limitWords(e.target.value, 200);
     setRequestDetails(val);
     if (requestDetailsTouched || requestDetailsError) {
       setRequestDetailsError(validateRequestDetails(val));
@@ -613,19 +664,21 @@ export default function LeadProfile({ lead, onSave, onCancel, isEditing, usersLi
                 <input type="text" value={projectName} onChange={(e) => setProjectName(e.target.value)} placeholder="e.g. Horizon Retail Omnichannel Commerce Transform" />
               </div>
               <div className="form-group">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                  <label style={{ margin: 0 }}>
-                    Request Details <span style={{ color: 'var(--color-danger)' }}>*</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', gap: '8px', flexWrap: 'nowrap' }}>
+                  <label style={{ margin: 0, whiteSpace: 'nowrap', fontSize: '13px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                    Request Details <span style={{ color: 'var(--color-danger)', display: 'inline' }}>*</span>
                   </label>
                   <span 
                     className="word-counter"
                     style={{ 
-                      fontSize: '11px',
-                      fontWeight: '500',
-                      color: (currentWordCount < 10 || currentWordCount > 200) ? 'var(--color-text-muted)' : '#10b981'
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      whiteSpace: 'nowrap',
+                      flexShrink: 0,
+                      color: currentWordCount < 10 ? 'var(--color-text-muted)' : (currentWordCount === 200 ? '#2563eb' : '#10b981')
                     }}
                   >
-                    {currentWordCount} / 200 words {currentWordCount < 10 && <span>(at least 10 words required)</span>}
+                    {currentWordCount} / 200 words
                   </span>
                 </div>
                 <textarea

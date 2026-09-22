@@ -16,6 +16,7 @@ import {
   CURRENCY_RATES,
   CURRENCY_SYMBOLS,
   BASE_GRADE_DAILY_COSTS_USD,
+  getGradeDailyCostUSD,
   convertFromUSD,
   convertToUSD
 } from '../services/commercialService';
@@ -247,7 +248,7 @@ export default function CommercialEstimation() {
   const [analyticsData, setAnalyticsData] = useState(null);
 
   const getGradeDailyCost = useCallback((grade, currency = 'USD') => {
-    const baseUSD = BASE_GRADE_DAILY_COSTS_USD[grade] || BASE_GRADE_DAILY_COSTS_USD.L1;
+    const baseUSD = getGradeDailyCostUSD(grade);
     return convertFromUSD(baseUSD, currency);
   }, []);
 
@@ -277,9 +278,7 @@ export default function CommercialEstimation() {
     if (Array.isArray(comm.resources) && comm.resources.length > 0) {
       setResources(comm.resources.map((r, i) => {
         const { selectedRole, customRole } = getRoleDropdownState(r.role);
-        const baseDailyCostUSD = (r.dailyCost !== undefined && r.dailyCost !== null)
-          ? convertToUSD(r.dailyCost, activeCurrency)
-          : (BASE_GRADE_DAILY_COSTS_USD[r.grade || 'L1'] || 180);
+        const baseDailyCostUSD = getGradeDailyCostUSD(r.grade || 'L1');
         const baseBillingRateUSD = (r.billingRate !== undefined && r.billingRate !== null)
           ? convertToUSD(r.billingRate, activeCurrency)
           : 0;
@@ -291,7 +290,7 @@ export default function CommercialEstimation() {
           grade: r.grade || 'L1',
           onsiteDays: r.onsiteDays !== undefined && r.onsiteDays !== null ? r.onsiteDays : 0,
           offshoreDays: r.offshoreDays !== undefined && r.offshoreDays !== null ? r.offshoreDays : 0,
-          dailyCost: r.dailyCost !== undefined && r.dailyCost !== null ? r.dailyCost : convertFromUSD(baseDailyCostUSD, activeCurrency),
+          dailyCost: convertFromUSD(baseDailyCostUSD, activeCurrency),
           billingRate: r.billingRate !== undefined && r.billingRate !== null ? r.billingRate : convertFromUSD(baseBillingRateUSD, activeCurrency),
           baseDailyCostUSD,
           baseBillingRateUSD
@@ -605,7 +604,7 @@ export default function CommercialEstimation() {
 
         if (field === 'grade') {
           const updatedGrade = val;
-          const baseDailyCostUSD = BASE_GRADE_DAILY_COSTS_USD[updatedGrade] || BASE_GRADE_DAILY_COSTS_USD.L1;
+          const baseDailyCostUSD = getGradeDailyCostUSD(updatedGrade);
           const convertedDailyCost = convertFromUSD(baseDailyCostUSD, activeCurrency);
           return {
             ...r,
@@ -628,7 +627,7 @@ export default function CommercialEstimation() {
   const handleAddResource = () => {
     setFinancialSummary(null);
     const activeCurrency = projectInfo.currency === 'select' ? 'USD' : projectInfo.currency;
-    const baseDailyCostUSD = BASE_GRADE_DAILY_COSTS_USD.L1;
+    const baseDailyCostUSD = getGradeDailyCostUSD('L1');
     const nextId = `res-temp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     setResources(prev => [
       ...prev,
@@ -1111,6 +1110,13 @@ ${resources.map(r => `- ${r.role} (${r.grade}): ${(Number(r.onsiteDays) || 0) + 
               <option value="INR">INR (₹)</option>
               <option value="EUR">EUR (€)</option>
               <option value="GBP">GBP (£)</option>
+              <option value="SAR">SAR (ر.س)</option>
+              <option value="AED">AED (د.إ)</option>
+              <option value="QAR">QAR (ر.ق)</option>
+              <option value="KWD">KWD (د.ك)</option>
+              <option value="BHD">BHD (.د.ب)</option>
+              <option value="OMR">OMR (ر.ع)</option>
+              <option value="ZAR">ZAR (R)</option>
             </select>
           </div>
           <div className="form-field">
@@ -1207,7 +1213,7 @@ ${resources.map(r => `- ${r.role} (${r.grade}): ${(Number(r.onsiteDays) || 0) + 
                       <input type="text" value={r.offshoreDays} onChange={(evt) => handleResourceChange(r.id, 'offshoreDays', evt.target.value)} />
                     </td>
                     <td className="daily-cost-column">
-                      <input type="text" value={r.dailyCost} readOnly />
+                      <input type="text" value={r.dailyCost} readOnly disabled />
                     </td>
                     <td>
                       <input type="text" value={r.billingRate} onChange={(evt) => handleResourceChange(r.id, 'billingRate', evt.target.value)} />
@@ -1215,7 +1221,7 @@ ${resources.map(r => `- ${r.role} (${r.grade}): ${(Number(r.onsiteDays) || 0) + 
                     <td style={{ fontWeight: '600' }}>
                       {Math.round(totalCostVal).toLocaleString()}
                     </td>
-                    <td style={{ fontWeight: '600', color: '#1D4ED8' }}>
+                    <td style={{ fontWeight: '600', color: '#38BDF8' }}>
                       {Math.round(totalRevVal).toLocaleString()}
                     </td>
                     <td style={{ textAlign: 'center' }}>
@@ -1232,7 +1238,7 @@ ${resources.map(r => `- ${r.role} (${r.grade}): ${(Number(r.onsiteDays) || 0) + 
                 <td>{totals.offshoreDays}</td>
                 <td colSpan="2">-</td>
                 <td>{Math.round(totals.resourceCost).toLocaleString()}</td>
-                <td style={{ color: '#1D4ED8' }}>{Math.round(totals.resourceRevenue).toLocaleString()}</td>
+                <td style={{ color: '#38BDF8' }}>{Math.round(totals.resourceRevenue).toLocaleString()}</td>
                 <td></td>
               </tr>
             </tbody>
@@ -1311,7 +1317,7 @@ ${resources.map(r => `- ${r.role} (${r.grade}): ${(Number(r.onsiteDays) || 0) + 
               })}
               <tr className="total-row">
                 <td>Total Expenses</td>
-                <td style={{ color: '#1D4ED8' }}>{totals.expenseCost.toLocaleString()}</td>
+                <td style={{ color: '#38BDF8' }}>{totals.expenseCost.toLocaleString()}</td>
                 <td colSpan="2">Sum of all non-resource deliverables &amp; hosting</td>
               </tr>
             </tbody>
@@ -1460,9 +1466,9 @@ ${resources.map(r => `- ${r.role} (${r.grade}): ${(Number(r.onsiteDays) || 0) + 
             </div>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', backgroundColor: '#F8FAFC', padding: '24px', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', backgroundColor: 'var(--color-surface-subtle, #182850)', padding: '24px', borderRadius: '12px', border: '1px solid var(--color-border, rgba(59, 130, 246, 0.25))' }}>
             <div className="form-field" style={{ marginBottom: '16px' }}>
-              <label style={{ fontSize: '13px', color: '#1E293B' }}>Or Override Selling Price Manually</label>
+              <label style={{ fontSize: '13px', color: '#FFFFFF' }}>Or Override Selling Price Manually</label>
               <input 
                 type="text" 
                 value={scenario.useManualPrice ? scenario.manualSellingPrice : ''} 
@@ -1471,9 +1477,9 @@ ${resources.map(r => `- ${r.role} (${r.grade}): ${(Number(r.onsiteDays) || 0) + 
                 style={{ fontSize: '1.125rem', padding: '10px 14px' }}
               />
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#64748B' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--color-text-muted, #8FA4C7)' }}>
               <span>Target Margin Selling Price:</span>
-              <strong style={{ color: '#0F172A' }}>
+              <strong style={{ color: '#38BDF8' }}>
                 {(totals.totalProjectCost / (1 - (scenario.targetMargin / 100))).toLocaleString([], {maximumFractionDigits: 0})}
               </strong>
             </div>
@@ -1571,7 +1577,12 @@ ${resources.map(r => `- ${r.role} (${r.grade}): ${(Number(r.onsiteDays) || 0) + 
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(value) => `${value.toLocaleString()}`} />
+                <Tooltip 
+                  formatter={(value) => `${value.toLocaleString()}`} 
+                  contentStyle={{ backgroundColor: '#101F3E', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '8px', fontSize: '13px', color: '#FFFFFF', boxShadow: '0 8px 24px rgba(5, 12, 28, 0.6)' }}
+                  labelStyle={{ color: '#FFFFFF', fontWeight: 'bold' }}
+                  itemStyle={{ color: '#FFFFFF' }}
+                />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -1583,11 +1594,16 @@ ${resources.map(r => `- ${r.role} (${r.grade}): ${(Number(r.onsiteDays) || 0) + 
           <div className="chart-canvas-mock">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={getRevVsCostData()} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip formatter={(value) => `${value.toLocaleString()}`} />
-                <Legend />
-                <Bar dataKey="Revenue" fill="#1D4ED8" />
+                <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#FFFFFF' }} stroke="#8FA4C7" />
+                <YAxis tick={{ fontSize: 11, fill: '#FFFFFF' }} stroke="#8FA4C7" />
+                <Tooltip 
+                  formatter={(value) => `${value.toLocaleString()}`} 
+                  contentStyle={{ backgroundColor: '#101F3E', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '8px', fontSize: '13px', color: '#FFFFFF', boxShadow: '0 8px 24px rgba(5, 12, 28, 0.6)' }}
+                  labelStyle={{ color: '#FFFFFF', fontWeight: 'bold' }}
+                  itemStyle={{ color: '#FFFFFF' }}
+                />
+                <Legend formatter={(value) => <span style={{ color: '#FFFFFF' }}>{value}</span>} />
+                <Bar dataKey="Revenue" fill="#38BDF8" />
                 <Bar dataKey="Cost" fill="#EF4444" />
               </BarChart>
             </ResponsiveContainer>
@@ -1615,7 +1631,12 @@ ${resources.map(r => `- ${r.role} (${r.grade}): ${(Number(r.onsiteDays) || 0) + 
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(value) => `${value} Man-days`} />
+                <Tooltip 
+                  formatter={(value) => `${value} Man-days`} 
+                  contentStyle={{ backgroundColor: '#101F3E', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '8px', fontSize: '13px', color: '#FFFFFF', boxShadow: '0 8px 24px rgba(5, 12, 28, 0.6)' }}
+                  labelStyle={{ color: '#FFFFFF', fontWeight: 'bold' }}
+                  itemStyle={{ color: '#FFFFFF' }}
+                />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -1627,11 +1648,16 @@ ${resources.map(r => `- ${r.role} (${r.grade}): ${(Number(r.onsiteDays) || 0) + 
           <div className="chart-canvas-mock">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={getMonthlyCashflowData()} margin={{ top: 10, right: 10, left: 10, bottom: 5 }}>
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip formatter={(value) => `${value.toLocaleString()}`} />
-                <Legend />
-                <Line type="monotone" dataKey="Revenue" stroke="#1D4ED8" strokeWidth={2} activeDot={{ r: 8 }} />
+                <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#FFFFFF' }} stroke="#8FA4C7" />
+                <YAxis tick={{ fontSize: 11, fill: '#FFFFFF' }} stroke="#8FA4C7" />
+                <Tooltip 
+                  formatter={(value) => `${value.toLocaleString()}`} 
+                  contentStyle={{ backgroundColor: '#101F3E', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '8px', fontSize: '13px', color: '#FFFFFF', boxShadow: '0 8px 24px rgba(5, 12, 28, 0.6)' }}
+                  labelStyle={{ color: '#FFFFFF', fontWeight: 'bold' }}
+                  itemStyle={{ color: '#FFFFFF' }}
+                />
+                <Legend formatter={(value) => <span style={{ color: '#FFFFFF' }}>{value}</span>} />
+                <Line type="monotone" dataKey="Revenue" stroke="#38BDF8" strokeWidth={2} activeDot={{ r: 8 }} />
                 <Line type="monotone" dataKey="Cost" stroke="#EF4444" strokeWidth={2} />
                 <Line type="monotone" dataKey="Cashflow" stroke="#10B981" strokeWidth={3} />
               </LineChart>

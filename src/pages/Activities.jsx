@@ -1,7 +1,42 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Phone, Mail, Calendar, MonitorPlay, Globe, Plus, X, Play, Pause, Paperclip, FileText, CheckCircle2, Clock, Sparkles, RefreshCw, ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { 
+  Phone, 
+  Mail, 
+  Calendar, 
+  MonitorPlay, 
+  Globe, 
+  Plus, 
+  X, 
+  Play, 
+  Pause, 
+  Paperclip, 
+  FileText, 
+  CheckCircle2, 
+  Clock, 
+  Sparkles, 
+  RefreshCw, 
+  ChevronUp, 
+  ChevronDown, 
+  ChevronLeft, 
+  ChevronRight,
+  Zap,
+  Send,
+  Check,
+  CheckSquare,
+  Square,
+  User,
+  Building,
+  ExternalLink,
+  MessageSquare
+} from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { fetchLeads, fetchActivitiesFeed, fetchActivitiesSummary, logGlobalActivity } from '../services/leadService';
+import { 
+  fetchLeads, 
+  fetchActivitiesFeed, 
+  fetchActivitiesSummary, 
+  logGlobalActivity,
+  completeActivity 
+} from '../services/leadService';
 import { normalizeError } from '../services/apiError';
 import { useToast } from '../context/FeedbackContext';
 import { useMasterData } from '../context/MasterDataContext';
@@ -28,9 +63,62 @@ const getActivityMeta = (type) => {
   }
 };
 
+// Email Templates Presets
+const EMAIL_TEMPLATES = [
+  {
+    name: 'Introduction & Value Prop',
+    subject: 'Accelerating Revenue Operations with PMRG Sales Tracker',
+    body: `Hi {contact},
+
+I noticed {company} is scaling its B2B revenue and sales operations. 
+
+PMRG Sales Tracker provides an automated CRM with AI forecasting, real-time pipeline visualization, and commercial estimations tailored to high-growth teams.
+
+Would you be open to a brief 10-minute discovery discussion next week?
+
+Best regards,\nPMRG Sales Team`
+  },
+  {
+    name: 'Post-Call Follow-up',
+    subject: 'Summary of our discussion & Next Steps for {company}',
+    body: `Hi {contact},
+
+Thank you for taking the time to speak with us today regarding {company}'s CRM and revenue pipeline requirements.
+
+As discussed, I am attaching our platform overview and enterprise security documentation. Let's reconnect for the live architecture demonstration.
+
+Best regards,\nPMRG Sales Team`
+  },
+  {
+    name: 'Demo Invitation & Deck',
+    subject: 'Live Platform Walkthrough Invitation: PMRG Sales Tracker',
+    body: `Hi {contact},
+
+Following up on our conversation, I'd like to invite you and your team to a customized demonstration of PMRG Sales Tracker.
+
+We'll cover automated lead scoring, revenue forecasting models, and commercial quote builders. Let me know what time works best for you!
+
+Best regards,\nPMRG Sales Team`
+  },
+  {
+    name: 'Commercial Proposal Follow-up',
+    subject: 'Commercial Proposal & Custom Deployment Plan for {company}',
+    body: `Hi {contact},
+
+I am pleased to share the tailored commercial estimation and proposal for {company}.
+
+Our package includes full platform access, dedicated SLA support, and seamless CRM data migration. Please let me know if you have any questions.
+
+Best regards,\nPMRG Sales Team`
+  }
+];
+
 export default function Activities() {
   const { usersList: masterUsersList } = useMasterData();
   const showToast = useToast();
+  const navigate = useNavigate();
+
+  // Filters
   const [activeFilter, setActiveFilter] = useState('All Activity Types');
   const [userFilter, setUserFilter] = useState('All Users');
   const [leadFilter, setLeadFilter] = useState('All Leads');
@@ -69,14 +157,37 @@ export default function Activities() {
   });
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Modal & Interaction states
-  const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
-  const [logModalLoading, setLogModalLoading] = useState(false);
-  const [logModalError, setLogModalError] = useState('');
+  // Selected Activity Details Modal & Playback states
   const [selectedActivity, setSelectedActivity] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackTime, setPlaybackTime] = useState(0);
   const [demoProgress, setDemoProgress] = useState(0);
+
+  // =========================================================================
+  // Automation & Initiation Hub State
+  // =========================================================================
+  const [initiateModal, setInitiateModal] = useState({
+    isOpen: false,
+    type: 'Call', // 'Call' | 'Email' | 'Meeting' | 'Demo' | 'LinkedIn' | 'Proposal Sent' | 'Task' | 'Other'
+    leadId: '',
+    leadName: '',
+    company: '',
+    contact: '',
+    phone: '',
+    email: '',
+    subject: '',
+    desc: '',
+    outcome: '',
+    dueDate: '',
+    meetingPlatform: 'Google Meet',
+    callOutcome: 'Connected - Follow-up Requested',
+    callDuration: '10 mins',
+    demoType: 'Full Platform Tour',
+    proposalValue: '$15,000',
+    isCustomLead: false,
+  });
+  const [initiateLoading, setInitiateLoading] = useState(false);
+  const [initiateError, setInitiateError] = useState('');
 
   // Audio / Video playback simulation
   useEffect(() => {
@@ -128,11 +239,17 @@ export default function Activities() {
           fetchActivitiesSummary()
         ]);
         if (isMounted) {
-          if (leadsRes && leadsRes.success && leadsRes.data) {
-            setLeadsList(leadsRes.data);
+          if (leadsRes) {
+            const lData = leadsRes.data || leadsRes.leads || (Array.isArray(leadsRes) ? leadsRes : []);
+            if (Array.isArray(lData) && lData.length > 0) {
+              setLeadsList(lData);
+            }
           }
-          if (summaryRes && summaryRes.success && summaryRes.data) {
-            setSummaryData(summaryRes.data);
+          if (summaryRes) {
+            const sData = summaryRes.data || summaryRes;
+            if (sData) {
+              setSummaryData(sData);
+            }
           }
         }
       } catch (err) {
@@ -141,6 +258,19 @@ export default function Activities() {
     };
     loadInitialData();
     return () => { isMounted = false; };
+  }, []);
+
+  // Fetch Activities Summary Metrics
+  const loadSummary = useCallback(async () => {
+    try {
+      const res = await fetchActivitiesSummary();
+      const sData = res?.data || res;
+      if (sData) {
+        setSummaryData(sData);
+      }
+    } catch (err) {
+      console.error('Failed to load activities summary:', err);
+    }
   }, []);
 
   // Fetch Activities Feed from Backend with Filters & Pagination
@@ -160,7 +290,6 @@ export default function Activities() {
         query.rep = userFilter;
       }
       if (leadFilter && leadFilter !== 'All Leads') {
-        // Find matching lead ID if selected by contact/company
         const matched = leadsList.find(l => l.contact === leadFilter || l.company === leadFilter);
         if (matched) {
           query.lead_id = matched.leadId || matched.id;
@@ -226,6 +355,276 @@ export default function Activities() {
     setIsAiLoading(false);
   };
 
+  // Toggle Activity Completion directly in Database
+  const handleToggleComplete = async (activityId, currentStatus, e) => {
+    if (e) e.stopPropagation();
+    try {
+      await completeActivity(activityId, !currentStatus);
+      showToast(`✓ Activity marked as ${!currentStatus ? 'Completed' : 'Open'} in database!`, 'success');
+      await Promise.allSettled([loadActivitiesFeed(), loadSummary()]);
+    } catch (err) {
+      console.error('Failed to update activity status:', err);
+      showToast(err.message || 'Failed to update activity completion.', 'error');
+    }
+  };
+
+  // Comprehensive selectable leads: combination of backend leadsList and feed activity entities
+  const allSelectableLeads = useMemo(() => {
+    const map = new Map();
+    if (Array.isArray(leadsList)) {
+      leadsList.forEach(l => {
+        const id = String(l.leadId || l.id || l.company || l.contact);
+        if (id && !map.has(id)) {
+          map.set(id, {
+            id: l.leadId || l.id,
+            leadId: l.leadId || l.id,
+            company: l.company || l.name || '',
+            contact: l.contact || l.name || '',
+            phone: l.phone || l.officePhone || '',
+            email: l.email || '',
+            stage: l.stage || 'Lead',
+          });
+        }
+      });
+    }
+    if (Array.isArray(activitiesData)) {
+      activitiesData.forEach(a => {
+        const name = a.company || a.lead;
+        const id = String(a.leadId || name);
+        if (id && name && name !== 'Unknown Lead' && !map.has(id)) {
+          map.set(id, {
+            id: a.leadId || id,
+            leadId: a.leadId || id,
+            company: a.company || a.lead,
+            contact: a.lead || a.company,
+            phone: '',
+            email: '',
+            stage: 'Active',
+          });
+        }
+      });
+    }
+    return Array.from(map.values());
+  }, [leadsList, activitiesData]);
+
+  // Open the Tailored Action Initiation Modal
+  const handleOpenInitiate = (type, targetLead = null) => {
+    setInitiateError('');
+    const leadObj = targetLead;
+
+    const leadId = leadObj ? String(leadObj.leadId || leadObj.id || '') : '';
+    const company = leadObj?.company || '';
+    const contact = leadObj?.contact || leadObj?.name || '';
+    const phone = leadObj?.phone || leadObj?.officePhone || '';
+    const email = leadObj?.email || '';
+
+    let defaultSubject = '';
+    let defaultDesc = '';
+    let defaultOutcome = '';
+    let defaultDueDate = '';
+
+    const displayName = contact || company || '';
+
+    if (type === 'Call') {
+      defaultSubject = displayName ? `Call with ${displayName}` : 'Discovery Call';
+      defaultDesc = displayName ? `Conducted discovery call with ${displayName} regarding software requirements.` : 'Conducted discovery call regarding software requirements.';
+      defaultOutcome = 'Connected - Follow-up Requested';
+    } else if (type === 'Email') {
+      defaultSubject = company ? `PMRG Solution for ${company}` : 'PMRG Revenue Acceleration Solution';
+      defaultDesc = displayName ? `Sent introductory value proposition email to ${displayName}.` : 'Sent introductory value proposition email.';
+      defaultOutcome = 'Email Delivered';
+    } else if (type === 'Meeting') {
+      defaultSubject = company ? `Strategy & Architecture Review with ${company}` : 'Strategy & Architecture Review';
+      defaultDesc = displayName ? `Scheduled virtual consultation with ${displayName} and decision makers.` : 'Scheduled virtual consultation via Google Meet with decision makers.';
+      defaultOutcome = 'Meeting Confirmed';
+      const tmrw = new Date();
+      tmrw.setDate(tmrw.getDate() + 1);
+      defaultDueDate = tmrw.toISOString().split('T')[0];
+    } else if (type === 'Demo') {
+      defaultSubject = company ? `Product Demonstration with ${company}` : 'Platform Product Demonstration';
+      defaultDesc = displayName ? `Demonstrated live pipeline management and tools to ${displayName}.` : 'Demonstrated live pipeline management and commercial estimation tools.';
+      defaultOutcome = 'Demo Completed Successfully';
+    } else if (type === 'LinkedIn') {
+      defaultSubject = displayName ? `LinkedIn Outreach to ${displayName}` : 'LinkedIn Outreach Message';
+      defaultDesc = displayName ? `Connected and shared product overview note with ${displayName} on LinkedIn.` : 'Connected and shared product overview note on LinkedIn.';
+      defaultOutcome = 'InMail Sent';
+    } else if (type === 'Proposal Sent') {
+      defaultSubject = company ? `Enterprise Commercial Proposal for ${company}` : 'Enterprise Commercial Proposal';
+      defaultDesc = company ? `Dispatched commercial quotation with volume breakdown to ${company}.` : 'Dispatched commercial quotation with volume discount breakdown.';
+      defaultOutcome = 'Proposal Under Client Review';
+    } else {
+      defaultSubject = company ? `Follow-up Task for ${company}` : 'Follow-up Action Task';
+      defaultDesc = displayName ? `Follow up on open action items with ${displayName}.` : 'Follow up on open action items and review requirements.';
+      defaultOutcome = 'Task Open';
+      const nextWeek = new Date();
+      nextWeek.setDate(nextWeek.getDate() + 3);
+      defaultDueDate = nextWeek.toISOString().split('T')[0];
+    }
+
+    setInitiateModal({
+      isOpen: true,
+      type,
+      leadId,
+      leadName: displayName,
+      company,
+      contact,
+      phone,
+      email,
+      isCustomLead: false,
+      subject: defaultSubject,
+      desc: defaultDesc,
+      outcome: defaultOutcome,
+      dueDate: defaultDueDate,
+      meetingPlatform: 'Google Meet',
+      callOutcome: 'Connected - Follow-up Requested',
+      callDuration: '10 mins',
+      demoType: 'Full Platform Tour',
+      proposalValue: '$15,000',
+    });
+  };
+
+  // Lead selection change inside initiation modal
+  const handleInitiateLeadChange = (leadIdValue) => {
+    if (!leadIdValue) {
+      setInitiateModal(prev => {
+        let genericSubject = 'Activity';
+        let genericDesc = 'Activity notes';
+        if (prev.type === 'Call') {
+          genericSubject = 'Discovery Call';
+          genericDesc = 'Conducted discovery call regarding software requirements.';
+        } else if (prev.type === 'Email') {
+          genericSubject = 'PMRG Revenue Acceleration Solution';
+          genericDesc = 'Sent introductory value proposition email.';
+        } else if (prev.type === 'Meeting') {
+          genericSubject = 'Strategy & Architecture Review';
+          genericDesc = 'Scheduled virtual consultation via Google Meet with decision makers.';
+        } else if (prev.type === 'Demo') {
+          genericSubject = 'Platform Product Demonstration';
+          genericDesc = 'Demonstrated live pipeline management and commercial estimation tools.';
+        } else if (prev.type === 'LinkedIn') {
+          genericSubject = 'LinkedIn Outreach Message';
+          genericDesc = 'Connected and shared product overview note on LinkedIn.';
+        } else if (prev.type === 'Proposal Sent') {
+          genericSubject = 'Enterprise Commercial Proposal';
+          genericDesc = 'Dispatched commercial quotation with volume discount breakdown.';
+        } else {
+          genericSubject = 'Follow-up Action Task';
+          genericDesc = 'Follow up on open action items and review requirements.';
+        }
+        return {
+          ...prev,
+          leadId: '',
+          leadName: '',
+          company: '',
+          contact: '',
+          phone: '',
+          email: '',
+          subject: genericSubject,
+          desc: genericDesc
+        };
+      });
+      return;
+    }
+
+    const matched = allSelectableLeads.find(l => String(l.leadId || l.id) === String(leadIdValue));
+    if (matched) {
+      const company = matched.company || '';
+      const contact = matched.contact || matched.name || '';
+      const displayName = contact || company || '';
+      const phone = matched.phone || matched.officePhone || '';
+      const email = matched.email || '';
+
+      setInitiateModal(prev => {
+        let updatedDesc = prev.desc;
+        let updatedSubject = prev.subject;
+
+        if (prev.type === 'Call') {
+          updatedSubject = `Call with ${displayName}`;
+          updatedDesc = `Conducted discovery call with ${displayName} regarding software requirements.`;
+        } else if (prev.type === 'Email') {
+          updatedSubject = `PMRG Solution for ${company || displayName}`;
+          updatedDesc = `Sent introductory value proposition email to ${displayName}.`;
+        } else if (prev.type === 'Meeting') {
+          updatedSubject = `Strategy & Architecture Review with ${company || displayName}`;
+          updatedDesc = `Scheduled virtual consultation via Google Meet with ${displayName}.`;
+        } else if (prev.type === 'Demo') {
+          updatedSubject = `Product Demonstration with ${company || displayName}`;
+          updatedDesc = `Demonstrated live pipeline management and tools to ${displayName}.`;
+        } else if (prev.type === 'LinkedIn') {
+          updatedSubject = `LinkedIn Outreach to ${displayName}`;
+          updatedDesc = `Connected and shared product overview note with ${displayName} on LinkedIn.`;
+        } else if (prev.type === 'Proposal Sent') {
+          updatedSubject = `Enterprise Commercial Proposal for ${company || displayName}`;
+          updatedDesc = `Dispatched commercial quotation with volume breakdown to ${company || displayName}.`;
+        } else {
+          updatedSubject = `Follow-up Task for ${company || displayName}`;
+          updatedDesc = `Follow up on open action items with ${displayName}.`;
+        }
+
+        return {
+          ...prev,
+          leadId: String(matched.leadId || matched.id),
+          leadName: displayName,
+          company,
+          contact,
+          phone,
+          email,
+          subject: updatedSubject,
+          desc: updatedDesc
+        };
+      });
+    }
+  };
+
+  // Apply Email Template
+  const handleApplyEmailTemplate = (template) => {
+    const comp = initiateModal.company || 'Client';
+    const cont = initiateModal.contact || 'Team';
+    const formattedSubject = template.subject.replace('{company}', comp).replace('{contact}', cont);
+    const formattedBody = template.body.replace(/\{company\}/g, comp).replace(/\{contact\}/g, cont);
+
+    setInitiateModal(prev => ({
+      ...prev,
+      subject: formattedSubject,
+      desc: formattedBody
+    }));
+  };
+
+  // Execute and Save Activity directly to Database
+  const handleExecuteInitiate = async (e) => {
+    e.preventDefault();
+    if (!initiateModal.leadId && !initiateModal.company) {
+      setInitiateError('Please select a target lead or enter a company name.');
+      return;
+    }
+    setInitiateLoading(true);
+    setInitiateError('');
+
+    try {
+      const payload = {
+        type: initiateModal.type,
+        lead: initiateModal.company || initiateModal.leadName || 'Lead',
+        leadId: initiateModal.leadId || undefined,
+        desc: initiateModal.desc || initiateModal.subject || `${initiateModal.type} executed`,
+        outcome: initiateModal.outcome || undefined,
+        dueDate: initiateModal.dueDate || undefined,
+      };
+
+      await logGlobalActivity(payload);
+      showToast(`✓ ${initiateModal.type} saved successfully!`, 'success');
+      setInitiateModal(prev => ({ ...prev, isOpen: false }));
+      setCurrentPage(1);
+      loadActivitiesFeed();
+      loadSummary();
+    } catch (err) {
+      console.error('Failed to execute activity:', err);
+      setInitiateError(err.message || 'Failed to execute and log activity.');
+    } finally {
+      setInitiateLoading(false);
+    }
+  };
+
+  // Tasks Health modal states
   const [activeActivityModal, setActiveActivityModal] = useState(null);
   const [modalLoading, setModalLoading] = useState(false);
   const [actSearch, setActSearch] = useState('');
@@ -234,7 +633,6 @@ export default function Activities() {
   const [actTypeFilter, setActTypeFilter] = useState('');
   const [actPage, setActPage] = useState(1);
   const actItemsPerPage = 5;
-  const navigate = useNavigate();
 
   const handleOpenActivityModal = async (title) => {
     const isOverdue = title === 'Overdue Tasks';
@@ -302,6 +700,7 @@ export default function Activities() {
           let actDesc = item.desc || (isOverdue ? 'Overdue follow-up' : 'Scheduled activity');
 
           return {
+            id: item.id,
             actId: `ACT-${String(item.leadId || item.id).substring(0, 8)}`,
             leadId: item.leadId,
             company: item.company || 'Unknown Company',
@@ -361,8 +760,8 @@ export default function Activities() {
 
   const uniqueUsers = usersList.length > 0
     ? Array.from(new Set(usersList.map(u => u.name))).filter(Boolean).sort()
-    : Array.from(new Set(leadsList.map(l => l.owner))).filter(Boolean).sort();
-  const uniqueLeads = Array.from(new Set(leadsList.map(l => l.contact))).filter(Boolean).sort();
+    : Array.from(new Set(allSelectableLeads.map(l => l.owner || l.contact))).filter(Boolean).sort();
+  const uniqueLeads = Array.from(new Set(allSelectableLeads.map(l => l.company || l.contact))).filter(Boolean).sort();
   const uniqueGeos = ['North America', 'Europe', 'Asia Pacific', 'LATAM', 'India'];
   const uniqueIndustries = ['Retail', 'Defence', 'Consulting', 'E-commerce', 'Banking', 'Technology', 'Logistics', 'Healthcare', 'Finance', 'IT Services', 'Education', 'Manufacturing', 'Real Estate'];
 
@@ -381,49 +780,107 @@ export default function Activities() {
     return typeCounts[countKey] || 0;
   };
 
-  const handleLogActivity = async (e) => {
-    e.preventDefault();
-    setLogModalLoading(true);
-    setLogModalError('');
-    try {
-      const form = e.target;
-      const type = form.elements.type.value;
-      const lead = form.elements.lead.value;
-      const desc = form.elements.desc.value;
-      const outcome = form.elements.outcome?.value || '';
-      const dueDate = form.elements.dueDate?.value || '';
-
-      await logGlobalActivity({
-        type,
-        lead,
-        desc,
-        outcome: outcome || undefined,
-        dueDate: dueDate || undefined,
-      });
-
-      setIsActivityModalOpen(false);
-      form.reset();
-      setCurrentPage(1);
-      await Promise.allSettled([loadActivitiesFeed(), loadSummary()]);
-    } catch (err) {
-      console.error('Failed to log activity:', err);
-      setLogModalError(err.message || 'Failed to log activity.');
-    } finally {
-      setLogModalLoading(false);
-    }
-  };
-
   return (
     <div className="activities-container">
+      {/* Header */}
       <div className="activities-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h1 className="page-title" style={{ margin: 0 }}>Activities Timeline</h1>
+        <div>
+          <h1 className="page-title" style={{ margin: 0 }}>Activities Timeline</h1>
+          
+        </div>
         <button 
           className="btn-primary" 
-          style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', fontSize: '14px' }} 
-          onClick={() => { setLogModalError(''); setIsActivityModalOpen(true); }}
+          style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', fontSize: '14px' }} 
+          onClick={() => handleOpenInitiate('Call')}
         >
-          <Plus size={14} /> Log Activity
+          <Plus size={16} /> Quick Action
         </button>
+      </div>
+
+      {/* =========================================================================
+         Activity Automation & Initiation Hub Bar
+         ========================================================================= */}
+      <div className="initiate-activity-hub">
+        <div className="initiate-hub-header">
+          <div className="initiate-hub-title">
+            <Zap size={18} style={{ color: '#2563EB' }} />
+            <span>Initiate & Automate Activities</span>
+          </div>
+        </div>
+
+        <div className="initiate-actions-grid">
+          <button 
+            type="button" 
+            className="initiate-action-btn btn-act-call"
+            onClick={() => handleOpenInitiate('Call')}
+            title="Place or log a phone call"
+          >
+            <Phone size={15} /> Place Call
+          </button>
+          
+          <button 
+            type="button" 
+            className="initiate-action-btn btn-act-email"
+            onClick={() => handleOpenInitiate('Email')}
+            title="Send template email to lead"
+          >
+            <Mail size={15} /> Send Email
+          </button>
+
+          <button 
+            type="button" 
+            className="initiate-action-btn btn-act-meeting"
+            onClick={() => handleOpenInitiate('Meeting')}
+            title="Schedule calendar meeting"
+          >
+            <Calendar size={15} /> Schedule Meeting
+          </button>
+
+          <button 
+            type="button" 
+            className="initiate-action-btn btn-act-demo"
+            onClick={() => handleOpenInitiate('Demo')}
+            title="Book or conduct product demo"
+          >
+            <MonitorPlay size={15} /> Run Demo
+          </button>
+
+          <button 
+            type="button" 
+            className="initiate-action-btn btn-act-linkedin"
+            onClick={() => handleOpenInitiate('LinkedIn')}
+            title="Log LinkedIn outreach message"
+          >
+            <Globe size={15} /> LinkedIn Pitch
+          </button>
+
+          <button 
+            type="button" 
+            className="initiate-action-btn btn-act-proposal"
+            onClick={() => handleOpenInitiate('Proposal Sent')}
+            title="Dispatch commercial estimation & proposal"
+          >
+            <FileText size={15} /> Send Proposal
+          </button>
+
+          <button 
+            type="button" 
+            className="initiate-action-btn btn-act-task"
+            onClick={() => handleOpenInitiate('Other')}
+            title="Create next follow-up task"
+          >
+            <CheckCircle2 size={15} /> Create Task
+          </button>
+
+          <button 
+            type="button" 
+            className="initiate-action-btn btn-act-custom"
+            onClick={() => handleOpenInitiate('Call')}
+            title="Custom activity log"
+          >
+            <Plus size={15} /> Custom Log
+          </button>
+        </div>
       </div>
 
       {/* AI Summary Card for Activities */}
@@ -484,7 +941,7 @@ export default function Activities() {
               <div className="ai-premium-recommendation-box">
                 <div className="ai-premium-recommendation-title">AI Performance Recommendation</div>
                 <div className="ai-premium-recommendation-text">
-                  ⚡ **Follow-up Velocity is Key:** Your team average response speed is consistent. Engage leads within 24 hours of demonstration to improve win rates across pipeline stages.
+                  ⚡ **Automated Execution:** Log calls and send proposals directly from this page to maintain seamless CRM audit history and shorten sales velocity cycles.
                 </div>
               </div>
             </div>
@@ -567,9 +1024,16 @@ export default function Activities() {
         </div>
       </div>
 
-      {/* Activities Timeline list (main card) */}
+      {/* =========================================================================
+         Main Activity Log Timeline Card
+         ========================================================================= */}
       <div className="activities-main-card" style={{ padding: '28px' }}>
-        <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--color-text-main)', margin: '0 0 16px 0' }}>Activity Log</h2>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--color-text-main)', margin: 0 }}>
+            Activity Log & Audit Trail
+          </h2>
+          
+        </div>
         
         {/* Filter Pills inside card */}
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', borderBottom: '1px solid var(--color-border)', paddingBottom: '16px', marginBottom: '26px' }}>
@@ -629,15 +1093,16 @@ export default function Activities() {
             </div>
           ) : activitiesData.length > 0 ? (
             activitiesData.map(activity => {
-              const isInteractive = true;
+              const matchedLead = leadsList.find(l => l.leadId === activity.leadId || l.company === activity.company || l.contact === activity.lead);
+              
               return (
                 <div key={activity.id} className="global-timeline-item">
                   <div className={`timeline-circle ${activity.colorClass}`}>
                     {activity.icon}
                   </div>
                   <div 
-                    className={`timeline-item-card ${isInteractive ? 'interactive' : ''}`}
-                    onClick={() => isInteractive && setSelectedActivity(activity)}
+                    className="timeline-item-card interactive"
+                    onClick={() => setSelectedActivity(activity)}
                   >
                     <div className="timeline-item-header">
                       <div>
@@ -656,6 +1121,72 @@ export default function Activities() {
                         Outcome: {activity.outcome}
                       </div>
                     )}
+
+                    {/* Interactive Action Bar on each timeline item */}
+                    <div className="timeline-card-actions" onClick={(e) => e.stopPropagation()}>
+                      <div className="timeline-action-group">
+                        <button 
+                          type="button" 
+                          className="quick-action-pill"
+                          onClick={() => handleOpenInitiate('Call', matchedLead || { company: activity.lead, contact: activity.lead })}
+                          title="Place call to this lead"
+                        >
+                          <Phone size={12} /> Call
+                        </button>
+                        <button 
+                          type="button" 
+                          className="quick-action-pill"
+                          onClick={() => handleOpenInitiate('Email', matchedLead || { company: activity.lead, contact: activity.lead })}
+                          title="Send follow-up email"
+                        >
+                          <Mail size={12} /> Email
+                        </button>
+                        <button 
+                          type="button" 
+                          className="quick-action-pill"
+                          onClick={() => handleOpenInitiate('Meeting', matchedLead || { company: activity.lead, contact: activity.lead })}
+                          title="Schedule meeting"
+                        >
+                          <Calendar size={12} /> Meeting
+                        </button>
+                        <button 
+                          type="button" 
+                          className="quick-action-pill"
+                          onClick={() => handleOpenInitiate('Proposal Sent', matchedLead || { company: activity.lead, contact: activity.lead })}
+                          title="Send proposal"
+                        >
+                          <FileText size={12} /> Proposal
+                        </button>
+                      </div>
+
+                      <div className="timeline-action-group">
+                        <button 
+                          type="button" 
+                          className={`quick-action-pill ${activity.completed ? 'complete-pill' : ''}`}
+                          onClick={(e) => handleToggleComplete(activity.id, activity.completed, e)}
+                          title="Toggle completion status in database"
+                        >
+                          {activity.completed ? (
+                            <>
+                              <CheckSquare size={13} style={{ color: '#059669' }} /> Completed
+                            </>
+                          ) : (
+                            <>
+                              <Square size={13} /> Mark Done
+                            </>
+                          )}
+                        </button>
+
+                        <button 
+                          type="button" 
+                          className="quick-action-pill"
+                          onClick={() => setSelectedActivity(activity)}
+                          style={{ color: '#1D4ED8', fontWeight: 700 }}
+                        >
+                          View Details →
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               );
@@ -695,52 +1226,304 @@ export default function Activities() {
         )}
       </div>
 
-      {/* Log New Activity Modal */}
-      {isActivityModalOpen && (
+      {/* =========================================================================
+         Tailored Activity Initiation & Automation Modal (Database Connected)
+         ========================================================================= */}
+      {initiateModal.isOpen && (
         <div className="modal-overlay">
-          <div className="modal-content">
+          <div className="modal-content" style={{ maxWidth: '640px' }}>
             <div className="modal-header">
-              <h3>Log New Activity</h3>
-              <button className="icon-btn" onClick={() => setIsActivityModalOpen(false)}><X size={20} /></button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div className={`timeline-circle ${getActivityMeta(initiateModal.type).colorClass}`} style={{ width: '28px', height: '28px', boxShadow: 'none' }}>
+                  {getActivityMeta(initiateModal.type).icon}
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.15rem' }}>
+                    {initiateModal.type === 'Call' && 'Initiate & Log Phone Call'}
+                    {initiateModal.type === 'Email' && 'Dispatch & Log Email'}
+                    {initiateModal.type === 'Meeting' && 'Schedule & Log Client Meeting'}
+                    {initiateModal.type === 'Demo' && 'Book & Log Product Demonstration'}
+                    {initiateModal.type === 'LinkedIn' && 'Log LinkedIn Outreach Message'}
+                    {initiateModal.type === 'Proposal Sent' && 'Dispatch Commercial Proposal'}
+                    {initiateModal.type === 'Other' && 'Create Follow-up Action Task'}
+                  </h3>
+                  <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
+                    Record and track activity in client timeline.
+                  </span>
+                </div>
+              </div>
+              <button className="icon-btn" onClick={() => setInitiateModal(prev => ({ ...prev, isOpen: false }))}>
+                <X size={20} />
+              </button>
             </div>
-            {logModalError && (
+
+            {initiateError && (
               <div style={{ color: 'var(--color-danger)', padding: '12px 24px 0', fontSize: '13px', fontWeight: '500' }}>
-                ❌ {logModalError}
+                ❌ {initiateError}
               </div>
             )}
-            <form onSubmit={handleLogActivity} className="modal-form">
+
+            <form onSubmit={handleExecuteInitiate} className="modal-form" style={{ padding: '20px 24px' }}>
+              {/* Target Lead Selector */}
               <div className="form-group">
-                <label>Activity Type <span style={{ color: 'var(--color-danger)' }}>*</span></label>
-                <select name="type" required defaultValue="Call">
-                  <option value="Call">Call</option>
-                  <option value="Email">Email</option>
-                  <option value="Meeting">Meeting</option>
-                  <option value="Demo">Demo</option>
-                  <option value="LinkedIn">LinkedIn</option>
-                  <option value="Proposal Sent">Proposal Sent</option>
-                  <option value="Other">Other</option>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
+                  <label style={{ margin: 0 }}>Target Lead / Client <span style={{ color: 'var(--color-danger)' }}>*</span></label>
+                  <button
+                    type="button"
+                    onClick={() => setInitiateModal(prev => ({ 
+                      ...prev, 
+                      isCustomLead: !prev.isCustomLead,
+                      leadId: prev.isCustomLead ? '' : prev.leadId,
+                      company: prev.isCustomLead ? '' : prev.company,
+                      contact: prev.isCustomLead ? '' : prev.contact
+                    }))}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--color-primary)',
+                      fontSize: '11px',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      padding: 0,
+                      textDecoration: 'underline'
+                    }}
+                  >
+                    {initiateModal.isCustomLead ? '← Select from Existing Leads' : '+ Custom / Direct Client'}
+                  </button>
+                </div>
+
+                {!initiateModal.isCustomLead ? (
+                  <select 
+                    value={initiateModal.leadId} 
+                    onChange={(e) => {
+                      if (e.target.value === '__custom__') {
+                        setInitiateModal(prev => ({ ...prev, isCustomLead: true, leadId: '', company: '', contact: '' }));
+                      } else {
+                        handleInitiateLeadChange(e.target.value);
+                      }
+                    }}
+                    required={!initiateModal.isCustomLead}
+                    style={{ fontSize: '13px', padding: '9px 12px' }}
+                  >
+                    <option value="">Select a Lead...</option>
+                    {allSelectableLeads.map(lead => (
+                      <option key={lead.leadId || lead.id} value={String(lead.leadId || lead.id)}>
+                        {lead.company || lead.name || 'Company'} {lead.contact && lead.contact !== lead.company ? `— ${lead.contact}` : ''} ({lead.stage || 'Active'})
+                      </option>
+                    ))}
+                    <option value="__custom__">✏️ + Enter Custom / Unlisted Client...</option>
+                  </select>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: '8px' }}>
+                    <input 
+                      type="text"
+                      placeholder="Company / Client Name *"
+                      value={initiateModal.company}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setInitiateModal(prev => ({
+                          ...prev,
+                          company: val,
+                          leadName: prev.contact || val,
+                          subject: prev.type === 'Call' ? `Call with ${prev.contact || val}` : prev.subject
+                        }));
+                      }}
+                      required
+                      style={{ fontSize: '13px', padding: '9px 12px' }}
+                    />
+                    <input 
+                      type="text"
+                      placeholder="Contact Person (Optional)"
+                      value={initiateModal.contact}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setInitiateModal(prev => ({
+                          ...prev,
+                          contact: val,
+                          leadName: val || prev.company,
+                          subject: prev.type === 'Call' ? `Call with ${val || prev.company}` : prev.subject
+                        }));
+                      }}
+                      style={{ fontSize: '13px', padding: '9px 12px' }}
+                    />
+                  </div>
+                )}
+
+                {initiateModal.leadId && !initiateModal.isCustomLead && (initiateModal.company || initiateModal.contact) && (
+                  <div className="lead-select-badge">
+                    <span style={{ fontWeight: '600', color: 'var(--color-text-main)' }}>
+                      🏢 {initiateModal.company || initiateModal.contact} {initiateModal.contact && initiateModal.company ? `(${initiateModal.contact})` : ''}
+                    </span>
+                    <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
+                      {initiateModal.phone ? `📞 ${initiateModal.phone}` : ''} {initiateModal.email ? `✉️ ${initiateModal.email}` : ''}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Activity Type Switcher */}
+              <div className="form-group">
+                <label>Activity Action Type <span style={{ color: 'var(--color-danger)' }}>*</span></label>
+                <select 
+                  value={initiateModal.type} 
+                  onChange={(e) => handleOpenInitiate(e.target.value, allSelectableLeads.find(l => String(l.leadId || l.id) === String(initiateModal.leadId)))}
+                  required
+                >
+                  <option value="Call">📞 Phone Call</option>
+                  <option value="Email">✉️ Email</option>
+                  <option value="Meeting">📅 Meeting</option>
+                  <option value="Demo">🖥️ Product Demo</option>
+                  <option value="LinkedIn">🌐 LinkedIn Message</option>
+                  <option value="Proposal Sent">📄 Commercial Proposal</option>
+                  <option value="Other">📝 Task / Follow-up</option>
                 </select>
               </div>
+
+              {/* Call-specific controls */}
+              {initiateModal.type === 'Call' && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 0.9fr', gap: '12px' }}>
+                  <div className="form-group">
+                    <label>Call Status / Outcome</label>
+                    <select 
+                      value={initiateModal.outcome} 
+                      onChange={(e) => setInitiateModal(prev => ({ ...prev, outcome: e.target.value }))}
+                      style={{ fontSize: '13px', padding: '8px 10px' }}
+                    >
+                      <option value="Connected - Follow-up Requested">Connected - Follow-up</option>
+                      <option value="Connected - Scheduled Demo">Connected - Scheduled Demo</option>
+                      <option value="Connected - Proposal Requested">Connected - Proposal Requested</option>
+                      <option value="Left Voicemail">Left Voicemail</option>
+                      <option value="Gatekeeper / Busy">Gatekeeper / Busy</option>
+                      <option value="Not Interested">Not Interested</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Call Duration</label>
+                    <select 
+                      value={initiateModal.callDuration}
+                      onChange={(e) => setInitiateModal(prev => ({ ...prev, callDuration: e.target.value }))}
+                      style={{ fontSize: '13px', padding: '8px 10px' }}
+                    >
+                      <option value="2 mins">Quick Check (2 mins)</option>
+                      <option value="5 mins">Discovery (5 mins)</option>
+                      <option value="15 mins">Detailed Qual (15 mins)</option>
+                      <option value="30 mins">Strategic (30 mins)</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* Email-specific template selector */}
+              {initiateModal.type === 'Email' && (
+                <div className="form-group">
+                  <label>1-Click Email Template Presets</label>
+                  <div className="preset-chips-row">
+                    {EMAIL_TEMPLATES.map((tmpl, tIdx) => (
+                      <button
+                        key={tIdx}
+                        type="button"
+                        className="preset-chip"
+                        onClick={() => handleApplyEmailTemplate(tmpl)}
+                      >
+                        ⚡ {tmpl.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Meeting-specific platform selector */}
+              {initiateModal.type === 'Meeting' && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div className="form-group">
+                    <label>Meeting Platform</label>
+                    <select 
+                      value={initiateModal.meetingPlatform}
+                      onChange={(e) => setInitiateModal(prev => ({ ...prev, meetingPlatform: e.target.value }))}
+                    >
+                      <option value="Google Meet">Google Meet (Auto-link)</option>
+                      <option value="Zoom">Zoom Video</option>
+                      <option value="Microsoft Teams">Microsoft Teams</option>
+                      <option value="In-Person">In-Person at Client Office</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Meeting Outcome / Target</label>
+                    <input 
+                      type="text" 
+                      value={initiateModal.outcome} 
+                      onChange={(e) => setInitiateModal(prev => ({ ...prev, outcome: e.target.value }))}
+                      placeholder="e.g. Architectural Sign-off"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Proposal-specific deal value */}
+              {initiateModal.type === 'Proposal Sent' && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div className="form-group">
+                    <label>Estimated Quote Value ($)</label>
+                    <input 
+                      type="text" 
+                      value={initiateModal.proposalValue}
+                      onChange={(e) => setInitiateModal(prev => ({ ...prev, proposalValue: e.target.value }))}
+                      placeholder="$25,000"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Proposal Status</label>
+                    <input 
+                      type="text" 
+                      value={initiateModal.outcome} 
+                      onChange={(e) => setInitiateModal(prev => ({ ...prev, outcome: e.target.value }))}
+                      placeholder="Under Review"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Description & Action Notes */}
               <div className="form-group">
-                <label>Lead / Company <span style={{ color: 'var(--color-danger)' }}>*</span></label>
-                <input name="lead" type="text" required placeholder="e.g. Acme Corp or Contact Name" />
+                <label>
+                  {initiateModal.type === 'Email' ? 'Email Message Body' : 'Activity Description & Notes'} 
+                  <span style={{ color: 'var(--color-danger)' }}> *</span>
+                </label>
+                <textarea 
+                  value={initiateModal.desc} 
+                  onChange={(e) => setInitiateModal(prev => ({ ...prev, desc: e.target.value }))}
+                  required 
+                  rows={4}
+                  placeholder="Provide detailed notes or discussion points..."
+                />
               </div>
+
+              {/* Follow-up / Due Date */}
               <div className="form-group">
-                <label>Description <span style={{ color: 'var(--color-danger)' }}>*</span></label>
-                <textarea name="desc" required placeholder="What happened in this activity?" rows={3}></textarea>
+                <label>Scheduled Follow-up Date (Optional)</label>
+                <input 
+                  type="date" 
+                  value={initiateModal.dueDate} 
+                  onChange={(e) => setInitiateModal(prev => ({ ...prev, dueDate: e.target.value }))}
+                />
               </div>
-              <div className="form-group">
-                <label>Outcome</label>
-                <input name="outcome" type="text" placeholder="e.g. Scheduled Demo, Follow-up agreed" />
-              </div>
-              <div className="form-group">
-                <label>Due / Follow-up Date</label>
-                <input name="dueDate" type="date" />
-              </div>
-              <div className="modal-actions">
-                <button type="button" className="btn-secondary" disabled={logModalLoading} onClick={() => setIsActivityModalOpen(false)}>Cancel</button>
-                <button type="submit" className="btn-primary" disabled={logModalLoading}>
-                  {logModalLoading ? 'Saving...' : 'Save Activity'}
+
+              {/* Action Buttons */}
+              <div className="modal-actions" style={{ marginTop: '12px' }}>
+                <button 
+                  type="button" 
+                  className="btn-secondary" 
+                  disabled={initiateLoading} 
+                  onClick={() => setInitiateModal(prev => ({ ...prev, isOpen: false }))}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  className="btn-primary" 
+                  disabled={initiateLoading}
+                >
+                  {initiateLoading ? 'Saving...' : 'Save'}
                 </button>
               </div>
             </form>
@@ -759,7 +1542,7 @@ export default function Activities() {
                 </div>
                 <div>
                   <h3 className="detail-modal-title-text">{selectedActivity.type} Detail</h3>
-                  <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>ID: #{selectedActivity.id}</span>
+                  <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Database Record ID: #{selectedActivity.id}</span>
                 </div>
               </div>
               <button className="icon-btn" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted)' }} onClick={() => setSelectedActivity(null)}><X size={20} /></button>
@@ -826,8 +1609,34 @@ ${selectedActivity.rep}`}
                   
                   {/* Quick Actions */}
                   <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '8px' }}>
-                    <button className="btn-secondary" style={{ padding: '8px 16px', fontSize: '13px' }} onClick={() => showToast('Reply simulation started!', 'info')}>Reply</button>
-                    <button className="btn-primary" style={{ padding: '8px 16px', fontSize: '13px' }} onClick={() => showToast('Email resent successfully!', 'success')}>Resend Email</button>
+                    <button 
+                      className="btn-secondary" 
+                      style={{ padding: '8px 16px', fontSize: '13px' }} 
+                      onClick={() => {
+                        setSelectedActivity(null);
+                        handleOpenInitiate('Email', leadsList.find(l => l.company === selectedActivity.company || l.leadId === selectedActivity.leadId));
+                      }}
+                    >
+                      Reply to Email
+                    </button>
+                    <button 
+                      className="btn-primary" 
+                      style={{ padding: '8px 16px', fontSize: '13px' }} 
+                      onClick={async () => {
+                        await logGlobalActivity({
+                          type: 'Email',
+                          lead: selectedActivity.lead,
+                          leadId: selectedActivity.leadId,
+                          desc: `Resent: ${selectedActivity.desc}`,
+                          outcome: 'Delivered'
+                        });
+                        showToast('Email resent & logged to database!', 'success');
+                        setSelectedActivity(null);
+                        loadActivitiesFeed();
+                      }}
+                    >
+                      Resend Email & Log
+                    </button>
                   </div>
                 </div>
               )}
@@ -889,6 +1698,30 @@ ${selectedActivity.rep}`}
                       </div>
                     </div>
                   </div>
+
+                  {/* Quick Actions */}
+                  <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '8px' }}>
+                    <button 
+                      className="btn-secondary" 
+                      style={{ padding: '8px 16px', fontSize: '13px' }} 
+                      onClick={() => {
+                        setSelectedActivity(null);
+                        handleOpenInitiate('Call', leadsList.find(l => l.company === selectedActivity.company || l.leadId === selectedActivity.leadId));
+                      }}
+                    >
+                      Call Back Lead
+                    </button>
+                    <button 
+                      className="btn-primary" 
+                      style={{ padding: '8px 16px', fontSize: '13px' }} 
+                      onClick={() => {
+                        setSelectedActivity(null);
+                        handleOpenInitiate('Meeting', leadsList.find(l => l.company === selectedActivity.company || l.leadId === selectedActivity.leadId));
+                      }}
+                    >
+                      Schedule Follow-up Meeting
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -908,7 +1741,6 @@ ${selectedActivity.rep}`}
                       </div>
                     ) : (
                       <div style={{ width: '100%', height: '100%', position: 'relative' }}>
-                        {/* Mock Screen Share Interface */}
                         <div style={{ 
                           position: 'absolute', 
                           top: 0, left: 0, right: 0, bottom: 0,
@@ -965,6 +1797,19 @@ ${selectedActivity.rep}`}
                       </div>
                     </div>
                   </div>
+
+                  <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '8px' }}>
+                    <button 
+                      className="btn-primary" 
+                      style={{ padding: '8px 16px', fontSize: '13px' }} 
+                      onClick={() => {
+                        setSelectedActivity(null);
+                        handleOpenInitiate('Proposal Sent', leadsList.find(l => l.company === selectedActivity.company || l.leadId === selectedActivity.leadId));
+                      }}
+                    >
+                      Send Commercial Proposal
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -985,27 +1830,35 @@ ${selectedActivity.rep}`}
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--color-text-main)' }}>Action Items Checklist:</span>
-                    <div style={{ backgroundColor: '#F8FAFC', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', padding: '14px', fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      <div className="checklist-item">
-                        <CheckCircle2 size={14} style={{ color: '#10B981' }} />
-                        <span>Delivered enterprise architectural diagram walkthrough.</span>
-                      </div>
-                      <div className="checklist-item">
-                        <CheckCircle2 size={14} style={{ color: '#10B981' }} />
-                        <span>Addressed data localization and security compliance queries.</span>
-                      </div>
-                      <div className="checklist-item">
-                        <Clock size={14} style={{ color: '#F59E0B' }} />
-                        <span>Next follow-up planned within upcoming milestone timeline.</span>
-                      </div>
-                    </div>
-                  </div>
-
                   <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '8px' }}>
-                    <button className="btn-secondary" style={{ padding: '8px 16px', fontSize: '13px' }} onClick={() => showToast('Calendar event logged!', 'info')}>View in Calendar</button>
-                    <button className="btn-primary" style={{ padding: '8px 16px', fontSize: '13px' }} onClick={() => showToast('Thank you note sent to client!', 'success')}>Send Thank You Note</button>
+                    <button 
+                      className="btn-secondary" 
+                      style={{ padding: '8px 16px', fontSize: '13px' }} 
+                      onClick={() => {
+                        setSelectedActivity(null);
+                        handleOpenInitiate('Meeting', leadsList.find(l => l.company === selectedActivity.company || l.leadId === selectedActivity.leadId));
+                      }}
+                    >
+                      Schedule Follow-up Meeting
+                    </button>
+                    <button 
+                      className="btn-primary" 
+                      style={{ padding: '8px 16px', fontSize: '13px' }} 
+                      onClick={async () => {
+                        await logGlobalActivity({
+                          type: 'Email',
+                          lead: selectedActivity.lead,
+                          leadId: selectedActivity.leadId,
+                          desc: `Thank you note sent following meeting with ${selectedActivity.lead}`,
+                          outcome: 'Delivered'
+                        });
+                        showToast('Thank you note sent and logged!', 'success');
+                        setSelectedActivity(null);
+                        loadActivitiesFeed();
+                      }}
+                    >
+                      Send Thank You Email & Log
+                    </button>
                   </div>
                 </div>
               )}
@@ -1026,7 +1879,7 @@ ${selectedActivity.rep}`}
 
                   <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '8px' }}>
                     <button className="btn-primary" style={{ padding: '8px 16px', fontSize: '13px', backgroundColor: '#0077B5', border: 'none' }} onClick={() => window.open('https://linkedin.com', '_blank')}>
-                      Open LinkedIn Profile
+                      Open LinkedIn Profile <ExternalLink size={14} style={{ marginLeft: '4px' }} />
                     </button>
                   </div>
                 </div>
@@ -1056,8 +1909,34 @@ ${selectedActivity.rep}`}
                   </div>
 
                   <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '8px' }}>
-                    <button className="btn-secondary" style={{ padding: '8px 16px', fontSize: '13px' }} onClick={() => showToast('SLA document generated!', 'info')}>Edit Document</button>
-                    <button className="btn-primary" style={{ padding: '8px 16px', fontSize: '13px' }} onClick={() => showToast('Proposal approved and status updated!', 'success')}>Mark as Approved</button>
+                    <button 
+                      className="btn-secondary" 
+                      style={{ padding: '8px 16px', fontSize: '13px' }} 
+                      onClick={() => {
+                        setSelectedActivity(null);
+                        handleOpenInitiate('Proposal Sent', leadsList.find(l => l.company === selectedActivity.company || l.leadId === selectedActivity.leadId));
+                      }}
+                    >
+                      Revise Proposal
+                    </button>
+                    <button 
+                      className="btn-primary" 
+                      style={{ padding: '8px 16px', fontSize: '13px' }} 
+                      onClick={async () => {
+                        await logGlobalActivity({
+                          type: 'Proposal Sent',
+                          lead: selectedActivity.lead,
+                          leadId: selectedActivity.leadId,
+                          desc: `Proposal approved for ${selectedActivity.lead}`,
+                          outcome: 'Approved by Client'
+                        });
+                        showToast('Proposal marked as Approved and logged!', 'success');
+                        setSelectedActivity(null);
+                        loadActivitiesFeed();
+                      }}
+                    >
+                      Mark as Approved & Log
+                    </button>
                   </div>
                 </div>
               )}
@@ -1071,7 +1950,16 @@ ${selectedActivity.rep}`}
                   </div>
 
                   <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '8px' }}>
-                    <button className="btn-primary" style={{ padding: '8px 16px', fontSize: '13px' }} onClick={() => showToast('Task generated successfully!', 'success')}>Convert to Task</button>
+                    <button 
+                      className="btn-primary" 
+                      style={{ padding: '8px 16px', fontSize: '13px' }} 
+                      onClick={() => {
+                        setSelectedActivity(null);
+                        handleOpenInitiate('Other', leadsList.find(l => l.company === selectedActivity.company || l.leadId === selectedActivity.leadId));
+                      }}
+                    >
+                      Create Follow-up Task
+                    </button>
                   </div>
                 </div>
               )}
@@ -1210,8 +2098,10 @@ ${selectedActivity.rep}`}
                   ) : (
                     getFilteredModalActivities().slice((actPage - 1) * actItemsPerPage, actPage * actItemsPerPage).map(a => {
                       const isOverdueView = activeActivityModal.title === 'Overdue Tasks';
+                      const leadObj = leadsList.find(l => l.leadId === a.leadId || l.company === a.company);
+
                       return (
-                        <tr key={a.actId + '-' + (a.leadId || '')} style={{ cursor: 'pointer' }} onClick={() => navigate('/leads', { state: { selectedLeadId: a.leadRaw.id } })}>
+                        <tr key={a.actId + '-' + (a.leadId || a.id)} style={{ cursor: 'pointer' }} onClick={() => navigate('/leads', { state: { selectedLeadId: a.leadRaw?.id } })}>
                           <td style={{ color: 'var(--color-primary)', fontWeight: 'bold' }}>{a.actId}</td>
                           <td style={{ color: 'var(--color-text-muted)', fontWeight: 'bold' }}>{a.leadId}</td>
                           <td style={{ fontWeight: '500' }}>{a.company}</td>
@@ -1240,16 +2130,33 @@ ${selectedActivity.rep}`}
                           <td><span className="badge badge-info">{a.priority}</span></td>
                           <td><span className="badge badge-success">{a.status}</span></td>
                           <td>
-                            <button 
-                              className="btn-secondary" 
-                              style={{ padding: '2px 8px', fontSize: '12px' }}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigate('/leads', { state: { selectedLeadId: a.leadRaw.id } });
-                              }}
-                            >
-                              Open Profile
-                            </button>
+                            <div style={{ display: 'flex', gap: '6px' }} onClick={(e) => e.stopPropagation()}>
+                              <button 
+                                className="btn-primary" 
+                                style={{ padding: '2px 8px', fontSize: '11px', backgroundColor: '#059669', borderColor: '#059669' }}
+                                onClick={async () => {
+                                  if (a.id) {
+                                    await completeActivity(a.id, true);
+                                    showToast('✓ Task completed in database!', 'success');
+                                    handleOpenActivityModal(activeActivityModal.title);
+                                    loadSummary();
+                                    loadActivitiesFeed();
+                                  }
+                                }}
+                              >
+                                ✓ Done
+                              </button>
+                              <button 
+                                className="btn-secondary" 
+                                style={{ padding: '2px 8px', fontSize: '11px' }}
+                                onClick={() => {
+                                  setActiveActivityModal(null);
+                                  handleOpenInitiate('Call', leadObj || { company: a.company, contact: a.contact });
+                                }}
+                              >
+                                Call
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );

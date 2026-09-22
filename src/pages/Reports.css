@@ -83,3 +83,35 @@
   border-radius: 999px;
   font-weight: 500;
 }
+
+/* Priority Leads Table Styling */
+.reports-container .table-wrapper table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.reports-container .table-wrapper th {
+  background-color: var(--color-surface-subtle);
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.reports-container .table-wrapper tbody tr {
+  background-color: var(--color-surface);
+  color: var(--color-text-main);
+  transition: background-color var(--transition-fast);
+}
+
+.reports-container .table-wrapper tbody tr:nth-child(even) {
+  background-color: var(--color-surface-subtle);
+}
+
+.reports-container .table-wrapper tbody tr:hover,
+.reports-container .table-wrapper tbody tr:nth-child(even):hover {
+  background-color: var(--color-surface-hover);
+}
+
+.reports-container .table-wrapper td {
+  color: var(--color-text-main);
+  border-bottom: 1px solid var(--color-border);
+}

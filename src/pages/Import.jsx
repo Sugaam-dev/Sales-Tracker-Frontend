@@ -310,15 +310,36 @@ export default function Import() {
     mapped.stage = mapped.stage || 'Prospecting';
 
     // Owner resolution
-    let ownerVal = String(mapped.owner || '').trim();
-    const matchedUser = usersList.find(u => 
-      u.name.toLowerCase() === ownerVal.toLowerCase() || 
-      u.email.toLowerCase() === ownerVal.toLowerCase()
-    );
-    if (matchedUser) {
-      mapped.owner = matchedUser.name;
-    } else if (usersList.length > 0) {
-      mapped.owner = usersList[0].name;
+    let rawOwner = String(mapped.owner || '').trim();
+    if (rawOwner) {
+      const matchedUser = usersList.find(u => 
+        u.name.toLowerCase() === rawOwner.toLowerCase() || 
+        u.email.toLowerCase() === rawOwner.toLowerCase()
+      );
+      if (matchedUser) {
+        mapped.owner = matchedUser.name;
+      } else {
+        // Keep explicit owner string so validation flags it if not in active users
+        mapped.owner = rawOwner;
+      }
+    } else {
+      // Case B: No owner in document -> fallback to authenticated user
+      let currentUserName = '';
+      try {
+        const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+        currentUserName = currentUser.name || '';
+      } catch {
+        // ignore parse error
+      }
+      if (currentUserName) {
+        const matchedUser = usersList.find(u => 
+          u.name.toLowerCase() === currentUserName.toLowerCase() || 
+          u.email?.toLowerCase() === currentUserName.toLowerCase()
+        );
+        mapped.owner = matchedUser ? matchedUser.name : currentUserName;
+      } else {
+        mapped.owner = '';
+      }
     }
 
     // Contact person fallback
@@ -348,6 +369,14 @@ export default function Import() {
       if (!emailRegex.test(lead.email.trim())) {
         errors.email = 'Invalid email address.';
       }
+    }
+
+    // Owner validation
+    const ownerName = (lead.owner || '').trim();
+    if (!ownerName) {
+      errors.owner = 'Lead owner is required.';
+    } else if (usersList.length > 0 && !usersList.some(u => u.name.toLowerCase() === ownerName.toLowerCase())) {
+      errors.owner = `Lead owner '${lead.owner}' was not found among active users.`;
     }
 
     // Phone Validation with international support
@@ -828,14 +857,21 @@ export default function Import() {
                       </td>
                       <td>
                         <select 
-                          className="table-input"
-                          value={lead.owner || (usersList[0]?.name || '')}
+                          className={`table-input ${errors.owner ? 'input-error' : ''}`}
+                          value={lead.owner || ''}
                           onChange={(e) => handleRowChange(idx, 'owner', e.target.value)}
                         >
+                          <option value="">-- Select Owner --</option>
+                          {lead.owner && !usersList.some(u => u.name === lead.owner) && (
+                            <option value={lead.owner} disabled>
+                              {lead.owner} (Not in active users)
+                            </option>
+                          )}
                           {usersList.map((u, uIdx) => (
                             <option key={uIdx} value={u.name}>{u.name}</option>
                           ))}
                         </select>
+                        {errors.owner && <span className="field-error-text">{errors.owner}</span>}
                       </td>
                       <td>
                         <select 
