@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
-import { Search, Plus, Bell, X } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { Search, Plus, Bell, X, ChevronDown, Settings, LogOut } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
 import QuickCreateLeadModal from './QuickCreateLeadModal';
 import { createLead } from '../services/leadService';
 import { useToast } from '../context/FeedbackContext';
@@ -33,14 +33,27 @@ const NOTIFICATIONS = [
   { id: 11, text: 'System maintenance scheduled for Sunday', time: '1w ago' }
 ];
 
-export default function Header() {
+export default function Header({ user, onLogout }) {
   const navigate = useNavigate();
   const showToast = useToast();
+  const profileRef = useRef(null);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showBanner, setShowBanner] = useState(false);
+
+  // Close profile dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (profileRef.current && !profileRef.current.contains(e.target)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     const showTimer = setTimeout(() => setShowBanner(true), 1500);
@@ -156,7 +169,16 @@ export default function Header() {
   return (
     <>
   <header className="main-header">
-    <div className="search-container">
+    <div className="header-left">
+      <Link to="/dashboard" className="header-logo-link" title="PMRG Solution Dashboard">
+        <img
+          src="/logo.png"
+          alt="PMRG Solution Logo"
+          className="header-logo-image"
+        />
+      </Link>
+
+      <div className="search-container">
       <form className="search-form" onSubmit={handleSearch}>
         <button type="submit" className="search-button">
           <Search size={20} />
@@ -165,7 +187,7 @@ export default function Header() {
         <input
           type="text"
           className="search-input"
-          placeholder="Search leads by company, contact or email..."
+          placeholder="Search leads, deals, contacts..."
           value={searchQuery}
           onChange={handleSearchChange}
         />
@@ -203,17 +225,26 @@ export default function Header() {
         </div>
       )}
     </div>
+  </div>
 
     <div className="header-actions">
-      <div className="notification-wrapper">
+      <button
+        className="btn-primary btn-quick-create"
+        onClick={() => setIsModalOpen(true)}
+      >
+        <Plus size={18} />
+        <span className="btn-quick-create-text">Quick Create Lead</span>
+      </button>
 
+      <div className="notification-wrapper">
         <button
           className="notif-btn"
           onClick={toggleNotifications}
+          aria-label="Notifications"
         >
           <Bell
-            size={42}
-            strokeWidth={2.8}
+            size={20}
+            strokeWidth={2.2}
           />
 
           <span className="notif-badge">
@@ -227,7 +258,6 @@ export default function Header() {
             onClick={openNotifications}
           >
             <div className="banner-header">
-
               <span className="banner-title">
                 New Alert
               </span>
@@ -238,7 +268,6 @@ export default function Header() {
               >
                 <X size={14} />
               </button>
-
             </div>
 
             <span className="banner-text">
@@ -248,10 +277,10 @@ export default function Header() {
             <span className="banner-time">
               Just now
             </span>
-
           </div>
         )} 
-                {isNotifOpen && (
+
+        {isNotifOpen && (
           <div className="notif-dropdown">
             <div className="notif-header">
               <h4>Notifications</h4>
@@ -277,13 +306,58 @@ export default function Header() {
         )}
       </div>
 
-      <button
-        className="btn-primary"
-        onClick={() => setIsModalOpen(true)}
-      >
-        <Plus size={20} />
-        Quick Create Lead
-      </button>
+      <div className="header-divider" aria-hidden="true" />
+
+      {/* Top-Right Authenticated User Profile */}
+      <div className="header-user-profile-wrapper" ref={profileRef}>
+        <div 
+          className={`header-user-profile ${dropdownOpen ? 'active' : ''}`}
+          onClick={() => setDropdownOpen(!dropdownOpen)}
+          role="button"
+          tabIndex={0}
+          aria-expanded={dropdownOpen}
+          aria-haspopup="true"
+        >
+          <div className="header-avatar">
+            {user?.initials || 'DG'}
+          </div>
+          <div className="header-user-info">
+            <span className="header-user-name">{user?.name || 'Debabrata Ghosh'}</span>
+            <span className="header-user-role">{user?.role || 'Admin'}</span>
+          </div>
+          <ChevronDown size={15} className={`header-chevron ${dropdownOpen ? 'open' : ''}`} />
+        </div>
+
+        {dropdownOpen && (
+          <div className="header-profile-dropdown">
+            <div className="header-dropdown-user-header">
+              <span className="header-dropdown-user-name">{user?.name || 'Debabrata Ghosh'}</span>
+              <span className="header-dropdown-user-email">{user?.email || 'admin@salestracker.com'}</span>
+            </div>
+            <div className="header-dropdown-divider" />
+            <button 
+              className="header-dropdown-item" 
+              onClick={() => { 
+                navigate('/settings'); 
+                setDropdownOpen(false); 
+              }}
+            >
+              <Settings size={16} />
+              <span>Account Settings</span>
+            </button>
+            <button 
+              className="header-dropdown-item logout" 
+              onClick={() => {
+                setDropdownOpen(false);
+                if (onLogout) onLogout();
+              }}
+            >
+              <LogOut size={16} />
+              <span>Sign out</span>
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   </header>
 

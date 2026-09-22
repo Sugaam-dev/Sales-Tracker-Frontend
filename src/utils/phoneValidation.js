@@ -1,4 +1,4 @@
-import { isValidPhoneNumber, validatePhoneNumberLength, parsePhoneNumber } from 'libphonenumber-js/min';
+import { isValidPhoneNumber, validatePhoneNumberLength, parsePhoneNumber } from 'libphonenumber-js';
 import { getCountryObj } from '../constants/countries';
 
 // Maximum national phone number digits by country ISO
