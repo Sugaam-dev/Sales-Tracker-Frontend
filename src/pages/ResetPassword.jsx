@@ -51,8 +51,8 @@ export default function ResetPassword() {
     <div className="auth-container">
       <div className="auth-card">
         <div className="auth-header">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginBottom: '16px' }}>
-            <img src="/logo.png" alt="PMRG Solution Logo" style={{ height: '48px', objectFit: 'contain', maxWidth: '100%' }} />
+          <div className="auth-logo-wrap">
+            <img src="/logo.png" alt="PMRG Solution Logo" />
           </div>
           <h2>Reset your password</h2>
           <p>Choose a new password for your account.</p>
@@ -65,7 +65,7 @@ export default function ResetPassword() {
         ) : (
           <form onSubmit={handleSubmit} className="auth-form">
             <div className="form-group">
-              <label>New password</label>
+              <label>NEW PASSWORD</label>
               <div className="password-input-wrapper">
                 <input
                   name="newPassword"
@@ -79,6 +79,7 @@ export default function ResetPassword() {
                   className="toggle-password"
                   onClick={() => setShowPassword(!showPassword)}
                   disabled={loading}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
@@ -87,7 +88,7 @@ export default function ResetPassword() {
             </div>
 
             <div className="form-group">
-              <label>Confirm new password</label>
+              <label>CONFIRM NEW PASSWORD</label>
               <input
                 name="confirmPassword"
                 type={showPassword ? 'text' : 'password'}

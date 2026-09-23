@@ -282,25 +282,13 @@ export default function Reports() {
           <div className="chart-wrapper">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={pipelineStageData} margin={{ top: 10, right: 10, left: 30, bottom: 35 }}>
-                <XAxis 
-                  dataKey="name" 
-                  tick={{ fontSize: 11, fill: '#FFFFFF' }} 
-                  stroke="#8FA4C7"
-                  interval={0} 
-                  angle={-30} 
-                  textAnchor="end" 
-                  height={70} 
-                />
-                <YAxis 
-                  tickFormatter={formatCurrency} 
-                  tick={{ fontSize: 11, fill: '#FFFFFF' }} 
-                  stroke="#8FA4C7"
-                />
+                <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-30} textAnchor="end" height={70} />
+                <YAxis tickFormatter={formatCurrency} tick={{ fontSize: 11 }} />
                  <Tooltip 
                    formatter={(value) => `$${value.toLocaleString()}`} 
-                   contentStyle={{ backgroundColor: '#101F3E', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '8px', fontSize: '13px', color: '#FFFFFF', boxShadow: '0 8px 24px rgba(5, 12, 28, 0.6)' }}
-                   labelStyle={{ color: '#FFFFFF', fontWeight: 'bold' }}
-                   itemStyle={{ color: '#FFFFFF' }}
+                   contentStyle={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }}
+                   labelStyle={{ color: 'var(--color-text-main)', fontWeight: 'bold' }}
+                   itemStyle={{ color: 'var(--color-primary)' }}
                  />
                 <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                   {pipelineStageData.map((entry, index) => (
@@ -335,17 +323,11 @@ export default function Reports() {
                 </Pie>
                 <Tooltip 
                   formatter={(value) => `${value}%`} 
-                  contentStyle={{ backgroundColor: '#101F3E', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '8px', fontSize: '13px', color: '#FFFFFF', boxShadow: '0 8px 24px rgba(5, 12, 28, 0.6)' }}
-                  labelStyle={{ color: '#FFFFFF', fontWeight: 'bold' }}
-                  itemStyle={{ color: '#FFFFFF' }}
+                  contentStyle={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }}
+                  labelStyle={{ color: 'var(--color-text-main)', fontWeight: 'bold' }}
+                  itemStyle={{ color: 'var(--color-primary)' }}
                 />
-                <RechartsLegend 
-                  layout="vertical" 
-                  verticalAlign="middle" 
-                  align="right" 
-                  wrapperStyle={{ fontSize: '12px' }}
-                  formatter={(value) => <span style={{ color: '#FFFFFF' }}>{value}</span>}
-                />
+                <RechartsLegend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{ fontSize: '12px' }} />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -359,30 +341,16 @@ export default function Reports() {
           <div className="chart-wrapper">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={repPerformanceData} layout="vertical" margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
-                <XAxis 
-                  type="number" 
-                  tickFormatter={formatCurrency} 
-                  tick={{ fontSize: 11, fill: '#FFFFFF' }} 
-                  stroke="#8FA4C7"
-                />
-                <YAxis 
-                  dataKey="name" 
-                  type="category" 
-                  tick={{ fontSize: 11, fill: '#FFFFFF' }} 
-                  stroke="#8FA4C7"
-                  width={60} 
-                />
+                <XAxis type="number" tickFormatter={formatCurrency} tick={{ fontSize: 11 }} />
+                <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} width={60} />
                 <Tooltip 
-                  cursor={{ fill: 'rgba(37, 99, 235, 0.15)' }} 
+                  cursor={{ fill: 'rgba(226, 232, 240, 0.3)' }} 
                   formatter={(value) => `$${value.toLocaleString()}`} 
-                  contentStyle={{ backgroundColor: '#101F3E', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '8px', fontSize: '13px', color: '#FFFFFF', boxShadow: '0 8px 24px rgba(5, 12, 28, 0.6)' }}
-                  labelStyle={{ color: '#FFFFFF', fontWeight: 'bold' }}
-                  itemStyle={{ color: '#FFFFFF' }}
+                  contentStyle={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }}
+                  labelStyle={{ color: 'var(--color-text-main)', fontWeight: 'bold' }}
+                  itemStyle={{ color: 'var(--color-primary)' }}
                 />
-                <RechartsLegend 
-                  wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }}
-                  formatter={(value) => <span style={{ color: '#FFFFFF' }}>{value}</span>}
-                />
+                <RechartsLegend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
                 <Bar dataKey="won" name="Won" stackId="a" fill="#10B981" />
                 <Bar dataKey="pipeline" name="Pipeline" stackId="a" fill="#3B82F6" />
                 <Bar dataKey="lost" name="Lost" stackId="a" fill="#EF4444" radius={[0, 4, 4, 0]} />
@@ -414,17 +382,11 @@ export default function Reports() {
                 </Pie>
                 <Tooltip 
                   formatter={(value) => `${value}%`} 
-                  contentStyle={{ backgroundColor: '#101F3E', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '8px', fontSize: '13px', color: '#FFFFFF', boxShadow: '0 8px 24px rgba(5, 12, 28, 0.6)' }}
-                  labelStyle={{ color: '#FFFFFF', fontWeight: 'bold' }}
-                  itemStyle={{ color: '#FFFFFF' }}
+                  contentStyle={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }}
+                  labelStyle={{ color: 'var(--color-text-main)', fontWeight: 'bold' }}
+                  itemStyle={{ color: 'var(--color-primary)' }}
                 />
-                <RechartsLegend 
-                  layout="vertical" 
-                  verticalAlign="middle" 
-                  align="right" 
-                  wrapperStyle={{ fontSize: '12px' }}
-                  formatter={(value) => <span style={{ color: '#FFFFFF' }}>{value}</span>}
-                />
+                <RechartsLegend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{ fontSize: '12px' }} />
               </PieChart>
             </ResponsiveContainer>
           </div>

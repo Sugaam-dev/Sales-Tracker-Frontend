@@ -60,8 +60,8 @@ export default function Onboarding({ onLogin }) {
     <div className="auth-container">
       <div className="auth-card">
         <div className="auth-header">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginBottom: '16px' }}>
-            <img src="/logo.png" alt="PMRG Solution Logo" style={{ height: '48px', objectFit: 'contain', maxWidth: '100%' }} />
+          <div className="auth-logo-wrap">
+            <img src="/logo.png" alt="PMRG Solution Logo" />
           </div>
           <h2>Set up your account</h2>
           <p>Let's get your account secured before your first sign in.</p>
