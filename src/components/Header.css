@@ -19,9 +19,9 @@
 .header-left {
   display: flex;
   align-items: center;
-  gap: 28px;
+  gap: 80px;
   flex: 1;
-  max-width: 800px;
+  max-width: 1100px;
 }
 
 .header-logo-link {
@@ -37,12 +37,12 @@
 }
 
 .header-logo-image {
-  height: 56px;
+  height: 78px;
   width: auto;
-  max-width: 230px;
+  max-width: 320px;
   object-fit: contain;
   display: block;
-  filter: drop-shadow(0 2px 6px rgba(37, 99, 235, 0.1));
+  filter: drop-shadow(0 2px 8px rgba(37, 99, 235, 0.12));
 }
 
 /* ===========================
@@ -608,17 +608,29 @@
    Responsive Design
 =========================== */
 
+@media (max-width: 1200px) {
+  .header-left {
+    gap: 50px;
+  }
+}
+
 @media (max-width: 1024px) {
+  .header-left {
+    gap: 36px;
+  }
   .search-container {
     max-width: 360px;
   }
   .header-logo-image {
-    height: 48px;
-    max-width: 200px;
+    height: 60px;
+    max-width: 240px;
   }
 }
 
 @media (max-width: 860px) {
+  .header-left {
+    gap: 20px;
+  }
   .btn-quick-create-text {
     display: none;
   }
@@ -629,8 +641,8 @@
     display: none;
   }
   .header-logo-image {
-    height: 44px;
-    max-width: 170px;
+    height: 48px;
+    max-width: 190px;
   }
 }
 

@@ -1,9 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { Search, Plus, Bell, X, ChevronDown, Settings, LogOut } from 'lucide-react';
+import { Search, Bell, X, ChevronDown, Settings, LogOut } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
-import QuickCreateLeadModal from './QuickCreateLeadModal';
-import { createLead } from '../services/leadService';
-import { useToast } from '../context/FeedbackContext';
 import './Header.css';
 
 const SEARCH_DATA = [
@@ -35,10 +32,8 @@ const NOTIFICATIONS = [
 
 export default function Header({ user, onLogout }) {
   const navigate = useNavigate();
-  const showToast = useToast();
   const profileRef = useRef(null);
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -72,64 +67,6 @@ export default function Header({ user, onLogout }) {
           item.contact.toLowerCase().includes(searchQuery.toLowerCase())
       )
     : [];
-
-  const handleCreateLead = async (data) => {
-    try {
-      const cleanPhone = String(data.phone).replace(/\D/g, '');
-      let statusPayload = 'Open';
-      const lowercaseStatus = String(data.status).toLowerCase();
-      if (['open', 'new', 'contacted', 'interested', 'negotiation'].includes(lowercaseStatus)) {
-        statusPayload = 'Open';
-      } else if (lowercaseStatus === 'in progress' || lowercaseStatus === 'analysis') {
-        statusPayload = 'In Progress';
-      } else if (lowercaseStatus === 'won' || lowercaseStatus === 'closed won') {
-        statusPayload = 'Won';
-      } else if (lowercaseStatus === 'lost' || lowercaseStatus === 'closed lost') {
-        statusPayload = 'Lost';
-      }
-
-      // Extract calling code e.g. "+91" from "IN +91"
-      let callingCode = '+91';
-      if (data.countryCode) {
-        const match = data.countryCode.match(/\+\d+/);
-        callingCode = match ? match[0] : data.countryCode;
-      }
-
-      const payload = {
-        company: data.companyName,
-        contact: data.leadName,
-        email: data.email,
-        phone: cleanPhone,
-        officePhone: cleanPhone,
-        countryCode: callingCode,
-        owner: data.owner,
-        stage: 'Qualification',
-        status: statusPayload,
-        sentiment: 'Neutral',
-        priority: data.priority,
-        kamName: data.leadName,
-        requestType: data.requestType,
-        requestDetails: data.requestDetails,
-        basicRequirements: data.requestDetails,
-        estimatedRequirementDate: data.estDate || '',
-      };
-
-      await createLead(payload);
-      setIsModalOpen(false);
-      showToast('Lead created successfully', 'success');
-      
-      setTimeout(() => {
-        // Reload page to show the new lead in the list
-        if (window.location.pathname === '/leads') {
-          window.location.reload();
-        }
-      }, 1200);
-    } catch (err) {
-      console.error('Quick Create Error:', err);
-      // Re-throw so QuickCreateLeadModal catches it and displays exact backend message
-      throw err;
-    }
-  };
 
   const handleSearchChange = (e) => {
     setSearchQuery(e.target.value);
@@ -167,8 +104,7 @@ export default function Header({ user, onLogout }) {
   };
 
   return (
-    <>
-  <header className="main-header">
+    <header className="main-header">
     <div className="header-left">
       <Link to="/dashboard" className="header-logo-link" title="PMRG Solution Dashboard">
         <img
@@ -228,14 +164,6 @@ export default function Header({ user, onLogout }) {
   </div>
 
     <div className="header-actions">
-      <button
-        className="btn-primary btn-quick-create"
-        onClick={() => setIsModalOpen(true)}
-      >
-        <Plus size={18} />
-        <span className="btn-quick-create-text">Quick Create Lead</span>
-      </button>
-
       <div className="notification-wrapper">
         <button
           className="notif-btn"
@@ -360,12 +288,5 @@ export default function Header({ user, onLogout }) {
       </div>
     </div>
   </header>
-
-  <QuickCreateLeadModal
-    isOpen={isModalOpen}
-    onClose={() => setIsModalOpen(false)}
-    onCreate={handleCreateLead}
-  />
-</>
   );
 }

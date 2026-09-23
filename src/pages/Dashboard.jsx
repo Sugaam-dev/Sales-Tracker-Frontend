@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { DollarSign, Percent, AlertCircle, CheckCircle2, X, Sparkles, RefreshCw, Trash2, Edit2, PlusCircle, ChevronUp, ChevronDown } from 'lucide-react';
+import { DollarSign, Percent, AlertCircle, CheckCircle2, X, Sparkles, RefreshCw, Trash2, Edit2, PlusCircle, Plus, ChevronUp, ChevronDown } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import KpiCard from '../components/KpiCard';
+import QuickCreateLeadModal from '../components/QuickCreateLeadModal';
 import { initialLeadsData } from './mockLeads';
-import { fetchDashboardSummary, fetchLeads, fetchActivitiesFeed, fetchCurrentUsers, fetchTasks, createTask, updateTaskStatus, deleteTask } from '../services/leadService';
+import { fetchDashboardSummary, fetchLeads, fetchActivitiesFeed, fetchCurrentUsers, fetchTasks, createTask, updateTaskStatus, deleteTask, createLead } from '../services/leadService';
 import { normalizeError } from '../services/apiError';
 import { useToast } from '../context/FeedbackContext';
 import { useMasterData } from '../context/MasterDataContext';
@@ -35,6 +36,70 @@ export default function Dashboard() {
   const [ownerFilter, setOwnerFilter] = useState('');
   const [regionFilter, setRegionFilter] = useState('');
   const usersList = masterUsersList;
+
+  // Quick Create Lead Modal State
+  const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
+
+  const handleCreateLead = async (data) => {
+    try {
+      const cleanPhone = String(data.phone).replace(/\D/g, '');
+      let statusPayload = 'Open';
+      const lowercaseStatus = String(data.status).toLowerCase();
+      if (['open', 'new', 'contacted', 'interested', 'negotiation'].includes(lowercaseStatus)) {
+        statusPayload = 'Open';
+      } else if (lowercaseStatus === 'in progress' || lowercaseStatus === 'analysis') {
+        statusPayload = 'In Progress';
+      } else if (lowercaseStatus === 'won' || lowercaseStatus === 'closed won') {
+        statusPayload = 'Won';
+      } else if (lowercaseStatus === 'lost' || lowercaseStatus === 'closed lost') {
+        statusPayload = 'Lost';
+      }
+
+      let callingCode = '+91';
+      if (data.countryCode) {
+        const match = data.countryCode.match(/\+\d+/);
+        callingCode = match ? match[0] : data.countryCode;
+      }
+
+      const payload = {
+        company: data.companyName,
+        contact: data.leadName,
+        email: data.email,
+        phone: cleanPhone,
+        officePhone: cleanPhone,
+        countryCode: callingCode,
+        owner: data.owner,
+        stage: 'Qualification',
+        status: statusPayload,
+        sentiment: 'Neutral',
+        priority: data.priority,
+        kamName: data.leadName,
+        requestType: data.requestType,
+        requestDetails: data.requestDetails,
+        basicRequirements: data.requestDetails,
+        estimatedRequirementDate: data.estDate || '',
+      };
+
+      await createLead(payload);
+      setIsQuickCreateOpen(false);
+      showToast('Lead created successfully', 'success');
+
+      // Refresh summary metrics
+      const queryParams = {};
+      if (ownerFilter) queryParams.owner = ownerFilter;
+      if (regionFilter) queryParams.region = regionFilter;
+      fetchDashboardSummary(queryParams)
+        .then((resp) => {
+          if (resp && resp.data) {
+            setDashboardData(resp.data);
+          }
+        })
+        .catch(console.error);
+    } catch (err) {
+      console.error('Quick Create Error:', err);
+      throw err;
+    }
+  };
 
   const [isAiExpanded, setIsAiExpanded] = useState(() => {
     const saved = sessionStorage.getItem('isAiExpanded');
@@ -408,14 +473,14 @@ export default function Dashboard() {
   return (
     <div className="dashboard-container">
         {/* Dashboard Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+        <div className="dashboard-top-header">
           <h1 className="page-title" style={{ margin: 0 }}> Dashboard </h1>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div className="dashboard-header-right-zone">
             {usersList.length > 0 && (
               <select
                 value={ownerFilter}
                 onChange={(e) => setOwnerFilter(e.target.value)}
-                style={{ padding: '6px 12px', fontSize: '13px', borderRadius: '6px', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-surface)', color: 'var(--color-text-main)' }}
+                className="dashboard-filter-select"
               >
                 <option value="">All Owners</option>
                 {usersList.map((u, i) => (
@@ -426,7 +491,7 @@ export default function Dashboard() {
             <select
               value={regionFilter}
               onChange={(e) => setRegionFilter(e.target.value)}
-              style={{ padding: '6px 12px', fontSize: '13px', borderRadius: '6px', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-surface)', color: 'var(--color-text-main)' }}
+              className="dashboard-filter-select"
             >
               <option value="">All Regions</option>
               <option value="North America">North America</option>
@@ -435,7 +500,16 @@ export default function Dashboard() {
               <option value="LATAM">LATAM</option>
               <option value="India">India</option>
             </select>
-            {loading && <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Updating...</span>}
+            {loading && <span className="dashboard-updating-indicator">Updating...</span>}
+
+            <button
+              className="btn-primary btn-dashboard-quick-create"
+              onClick={() => setIsQuickCreateOpen(true)}
+              type="button"
+            >
+              <Plus size={16} strokeWidth={2.4} />
+              <span>Quick Create Lead</span>
+            </button>
           </div>
         </div>
 
@@ -946,6 +1020,12 @@ export default function Dashboard() {
                 </div>
             </div>
         )}
+
+      <QuickCreateLeadModal
+        isOpen={isQuickCreateOpen}
+        onClose={() => setIsQuickCreateOpen(false)}
+        onCreate={handleCreateLead}
+      />
     </div>
-);
+  );
 }

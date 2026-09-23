@@ -6,6 +6,7 @@ import { fetchLeads, fetchLeadById, updateLead, createLead, deleteLead } from '.
 import { useToast, useConfirm } from '../context/FeedbackContext';
 import { useMasterData } from '../context/MasterDataContext';
 import { SkeletonTable, SkeletonBlock } from '../components/common/Skeleton';
+import QuickCreateLeadModal from '../components/QuickCreateLeadModal';
 import './Leads.css';
 
 import { initialLeadsData } from './mockLeads';
@@ -32,6 +33,82 @@ export default function Leads() {
       setEditStatus(selectedLead.status || 'New');
     }
   }, [isEditModalOpen, selectedLead]);
+
+  // Quick Create Lead Modal
+  const [isQuickModalOpen, setIsQuickModalOpen] = useState(false);
+
+  const handleQuickCreateLead = async (data) => {
+    try {
+      const cleanPhone = String(data.phone).replace(/\D/g, '');
+      let statusPayload = 'Open';
+      const lowercaseStatus = String(data.status).toLowerCase();
+      if (['open', 'new', 'contacted', 'interested', 'negotiation'].includes(lowercaseStatus)) {
+        statusPayload = 'Open';
+      } else if (lowercaseStatus === 'in progress' || lowercaseStatus === 'analysis') {
+        statusPayload = 'In Progress';
+      } else if (lowercaseStatus === 'won' || lowercaseStatus === 'closed won') {
+        statusPayload = 'Won';
+      } else if (lowercaseStatus === 'lost' || lowercaseStatus === 'closed lost') {
+        statusPayload = 'Lost';
+      }
+
+      let callingCode = '+91';
+      if (data.countryCode) {
+        const match = data.countryCode.match(/\+\d+/);
+        callingCode = match ? match[0] : data.countryCode;
+      }
+
+      const payload = {
+        company: data.companyName,
+        contact: data.leadName,
+        email: data.email,
+        phone: cleanPhone,
+        officePhone: cleanPhone,
+        countryCode: callingCode,
+        owner: data.owner,
+        stage: 'Qualification',
+        status: statusPayload,
+        sentiment: 'Neutral',
+        priority: data.priority,
+        kamName: data.leadName,
+        requestType: data.requestType,
+        requestDetails: data.requestDetails,
+        basicRequirements: data.requestDetails,
+        estimatedRequirementDate: data.estDate || '',
+      };
+
+      const res = await createLead(payload);
+      const created = res?.data || res;
+      if (created && created.id) {
+        setLeads(prev => [created, ...prev]);
+      }
+      setIsQuickModalOpen(false);
+      showToast('Lead created successfully', 'success');
+
+      try {
+        const refreshed = await fetchLeads({
+          page: 1,
+          limit: leadsPerPage,
+          search: debouncedSearch,
+          owner: ownerFilter,
+          stage: stageFilter,
+          priority: priorityFilter,
+          sortBy,
+          sortOrder,
+        });
+        if (refreshed?.data) {
+          setLeads(refreshed.data);
+          if (refreshed.pagination) setPagination(refreshed.pagination);
+        }
+      } catch (e) {
+        console.error('Failed to refresh leads after quick create:', e);
+      }
+    } catch (err) {
+      console.error('Quick Create Error:', err);
+      throw err;
+    }
+  };
+
   const [leadsPerPage, setLeadsPerPage] = useState(10);
   const [classificationLead, setClassificationLead] = useState(null);
   const [classStatus, setClassStatus] = useState('New');
@@ -445,15 +522,30 @@ export default function Leads() {
 
   return (
     <div className="leads-container">
-      <div className="leads-header" style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
-        <h1 className="page-title" style={{ margin: 0 }}>Leads Management</h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <span style={{ color: 'var(--color-text-muted)', fontSize: '14px' }}>{leads.length} leads total</span>
-          <button onClick={handleExportCSV} className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', fontSize: '14px' }}>
-            <Download size={14} /> Export CSV
-          </button>
-          <button className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', fontSize: '14px' }} onClick={() => { setIsCreatingLead(true); setSelectedLead(null); }}>
-            <Plus size={14} /> New Lead
+      <div className="leads-page-header">
+        <div className="leads-header-left">
+          <h1 className="page-title" style={{ margin: 0 }}>Leads Management</h1>
+          <div className="leads-header-subrow">
+            <span className="leads-total-counter">{pagination.total || leads.length} leads total</span>
+            <button onClick={handleExportCSV} className="btn-secondary btn-export-leads" type="button">
+              <Download size={14} />
+              <span>Export CSV</span>
+            </button>
+            <button className="btn-secondary btn-new-lead-form" type="button" onClick={() => { setIsCreatingLead(true); setSelectedLead(null); }}>
+              <Plus size={14} />
+              <span>New Lead</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="leads-header-right">
+          <button 
+            className="btn-primary btn-quick-create-lead-page" 
+            onClick={() => setIsQuickModalOpen(true)}
+            type="button"
+          >
+            <Plus size={16} strokeWidth={2.4} />
+            <span>Quick Create Lead</span>
           </button>
         </div>
       </div>
@@ -1491,6 +1583,12 @@ export default function Leads() {
           </div>
         </div>
       )}
+
+      <QuickCreateLeadModal
+        isOpen={isQuickModalOpen}
+        onClose={() => setIsQuickModalOpen(false)}
+        onCreate={handleQuickCreateLead}
+      />
     </div>
   );
 }

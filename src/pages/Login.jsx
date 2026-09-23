@@ -98,11 +98,11 @@ export default function Login({ onLogin }) {
 
         <form onSubmit={handleLogin} className="login-form">
           <div className="form-group">
-            <label>Email</label>
+            <label>EMAIL</label>
             <input
               name="email"
               type="email"
-              placeholder="name@company.com"
+              placeholder="admin@salestracker.com"
               disabled={loading}
               required
             />
@@ -110,7 +110,7 @@ export default function Login({ onLogin }) {
 
           <div className="form-group relative">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-              <label>Password</label>
+              <label>PASSWORD</label>
               <Link to="/forgot-password" className="forgot-password-link">
                 Forgot password?
               </Link>
@@ -128,8 +128,9 @@ export default function Login({ onLogin }) {
                 className="toggle-password"
                 onClick={() => setShowPassword(!showPassword)}
                 disabled={loading}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
               >
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                {showPassword ? <EyeOff size={19} strokeWidth={2} /> : <Eye size={19} strokeWidth={2} />}
               </button>
             </div>
           </div>

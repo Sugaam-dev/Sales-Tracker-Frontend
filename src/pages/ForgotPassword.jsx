@@ -35,8 +35,8 @@ export default function ForgotPassword() {
     <div className="auth-container">
       <div className="auth-card">
         <div className="auth-header">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginBottom: '16px' }}>
-            <img src="/logo.png" alt="PMRG Solution Logo" style={{ height: '48px', objectFit: 'contain', maxWidth: '100%' }} />
+          <div className="auth-logo-wrap">
+            <img src="/logo.png" alt="PMRG Solution Logo" />
           </div>
           <h2>Forgot your password?</h2>
           <p>Enter the email on your account and we'll send you a reset link.</p>
@@ -51,8 +51,8 @@ export default function ForgotPassword() {
         ) : (
           <form onSubmit={handleSubmit} className="auth-form">
             <div className="form-group">
-              <label>Email address</label>
-              <input name="email" type="email" placeholder="name@company.com" disabled={loading} required />
+              <label>EMAIL ADDRESS</label>
+              <input name="email" type="email" placeholder="admin@salestracker.com" disabled={loading} required />
             </div>
 
             <button type="submit" className="btn-primary auth-btn" disabled={loading}>
