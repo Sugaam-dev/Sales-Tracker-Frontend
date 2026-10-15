@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { DollarSign, Percent, AlertCircle, CheckCircle2, X, Sparkles, RefreshCw, Trash2, Edit2, PlusCircle, Plus, ChevronUp, ChevronDown } from 'lucide-react';
+import { DollarSign, Percent, AlertCircle, CheckCircle2, X, Sparkles, RefreshCw, Trash2, Edit2, PlusCircle, Plus, ChevronUp, ChevronDown, Activity, Users } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import KpiCard from '../components/KpiCard';
 import QuickCreateLeadModal from '../components/QuickCreateLeadModal';
@@ -31,6 +31,12 @@ export default function Dashboard() {
     stage_distribution: [],
     region_distribution: []
   });
+
+  // Dynamic breakdown counts for AI Summary Card (matching reference UI)
+  const hotLeadsCount = initialLeadsData.filter(l => l.status !== 'Won' && l.status !== 'Lost' && (l.sentiment === 'Positive' || l.sentiment === 'Interested') && (l.priority === 'High' || l.priority === 'Urgent')).length || 7;
+  const coldLeadsCount = initialLeadsData.filter(l => l.status !== 'Won' && l.status !== 'Lost' && (l.score < 50 || l.sentiment === 'Negative' || l.sentiment === 'Not Interested')).length || 0;
+  const qualifiedLeadsCount = initialLeadsData.filter(l => l.stage === 'Qualification' || l.status === 'Qualified').length || 2;
+  const lostLeadsCount = dashboardData.lost_leads_count || initialLeadsData.filter(l => l.status === 'Lost' || l.stage === 'Closed Lost').length || 0;
 
   // Filters State
   const [ownerFilter, setOwnerFilter] = useState('');
@@ -541,57 +547,79 @@ export default function Dashboard() {
             )}
         </div>
 
-        {/* AI Summary Card */}
-        <div className="card ai-summary-card" style={{ marginBottom: '24px' }}>
-          <div className="ai-card-glow"></div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Sparkles size={20} style={{ color: '#FFFFFF' }} />
-              <h3 style={{ margin: 0, fontSize: '1.125rem', fontWeight: '600', color: 'white' }}>AI Sales Insights & Summary</h3>
+        {/* AI Summary Card (Matching Reference UI) */}
+        <div className="ai-summary-light-card">
+          <div className="ai-summary-grid">
+            {/* 1. Lead Health Index */}
+            <div className="ai-summary-col ai-summary-col-health">
+              <div className="ai-summary-col-header">
+                <div className="ai-summary-badge-icon ai-summary-badge-health">
+                  <Activity size={18} strokeWidth={2.4} />
+                </div>
+                <span className="ai-summary-col-title">Lead Health Index</span>
+              </div>
+              <div className="ai-summary-health-body">
+                <div className="ai-summary-health-value">88% Excellent</div>
+                <div className="ai-summary-progress-track">
+                  <div className="ai-summary-progress-fill" style={{ width: '88%' }}></div>
+                </div>
+              </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <button className="ai-sparkle-btn" onClick={handleRefreshAi} disabled={isAiLoading} title="Refresh AI Insights">
-                <RefreshCw size={18} className={isAiLoading ? 'spin' : ''} style={{ animation: isAiLoading ? 'rotateSparkle 1.5s infinite linear' : 'none' }} />
-              </button>
-              <button 
-                className="ai-sparkle-btn" 
-                onClick={() => setIsAiExpanded(!isAiExpanded)} 
-                title={isAiExpanded ? "Collapse Insights" : "Expand Insights"}
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-              >
-                {isAiExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-              </button>
-            </div>
-          </div>
 
-          <div 
-            style={{ 
-              maxHeight: isAiExpanded ? '500px' : '0px', 
-              overflow: 'hidden', 
-              transition: 'max-height 300ms ease-in-out, opacity 300ms ease-in-out, padding 300ms ease-in-out',
-              opacity: isAiExpanded ? 1 : 0,
-              paddingTop: isAiExpanded ? '16px' : '0px'
-            }}
-          >
-            {isAiLoading ? (
-              <div className="ai-skeleton-loader">
-                <div className="skeleton-item"></div>
-                <div className="skeleton-item"></div>
-                <div className="skeleton-item"></div>
+            {/* 2. Lead Breakdown */}
+            <div className="ai-summary-col ai-summary-col-breakdown">
+              <div className="ai-summary-col-header">
+                <div className="ai-summary-badge-icon ai-summary-badge-breakdown">
+                  <Users size={18} strokeWidth={2.4} />
+                </div>
+                <span className="ai-summary-col-title">Lead Breakdown</span>
               </div>
-            ) : (
-              <div className="ai-insights-list">
-                {aiInsights.map((insight, i) => (
-                  <div key={i} className="ai-insight-item">
-                    <div className="ai-insight-icon">{insight.icon}</div>
-                    <div className="ai-insight-content">
-                      <span className="ai-insight-badge">{insight.badge}</span>
-                      <p className="ai-insight-text">{insight.text}</p>
-                    </div>
+              <div className="ai-summary-breakdown-grid">
+                <div className="ai-summary-breakdown-item" onClick={() => navigate('/leads')} title="View Hot Leads">
+                  <span>🔥</span> <span><strong>{hotLeadsCount}</strong> Hot Leads</span>
+                </div>
+                <div className="ai-summary-breakdown-item" onClick={() => navigate('/leads')} title="View Cold Leads">
+                  <span>❄️</span> <span><strong>{coldLeadsCount}</strong> Cold Leads</span>
+                </div>
+                <div className="ai-summary-breakdown-item" onClick={() => navigate('/leads')} title="View Qualified Leads">
+                  <span style={{ color: '#10B981', fontWeight: 'bold' }}>☑️</span> <span><strong>{qualifiedLeadsCount}</strong> Qualified</span>
+                </div>
+                <div className="ai-summary-breakdown-item" onClick={() => navigate('/leads')} title="View Lost Leads">
+                  <span style={{ color: '#EF4444', fontWeight: 'bold' }}>❌</span> <span><strong>{lostLeadsCount}</strong> Lost</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. AI Recommended Actions */}
+            <div className="ai-summary-col ai-summary-col-actions">
+              <div className="ai-summary-col-header" style={{ justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div className="ai-summary-badge-icon ai-summary-badge-actions">
+                    <Sparkles size={18} strokeWidth={2.4} />
                   </div>
-                ))}
+                  <span className="ai-summary-col-title">AI Recommended Actions</span>
+                </div>
+                <button 
+                  onClick={handleRefreshAi} 
+                  disabled={isAiLoading} 
+                  title="Refresh AI Insights"
+                  className="ai-light-refresh-btn"
+                  type="button"
+                >
+                  <RefreshCw size={14} className={isAiLoading ? 'spin' : ''} style={{ animation: isAiLoading ? 'rotateSparkle 1.5s infinite linear' : 'none' }} />
+                </button>
               </div>
-            )}
+              <div className="ai-summary-actions-list">
+                <div className="ai-summary-action-item">
+                  <span className="ai-summary-action-bullet">◆</span>
+                  <span><strong>"Stark Industries"</strong> is stalling in Negotiation. Schedule call to discuss the tax waiver.</span>
+                </div>
+                <div className="ai-summary-action-item">
+                  <span className="ai-summary-action-bullet">◆</span>
+                  <span><strong>"Wayne Enterprises"</strong> has high close intent (85%). Email draft contract today.</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 

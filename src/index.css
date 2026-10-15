@@ -446,3 +446,212 @@ dialog::backdrop {
   line-height: 1.6;
 }
 
+/* ===========================================================
+   MODERN LIGHT AI SUMMARY CARD (MATCHING REFERENCE UI)
+   =========================================================== */
+.ai-summary-light-card {
+  background: #FFFFFF;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: 16px;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04);
+  margin-bottom: 24px;
+}
+
+.ai-summary-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.15fr 2fr;
+  gap: 16px;
+}
+
+@media (max-width: 1120px) {
+  .ai-summary-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .ai-summary-col-actions {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 768px) {
+  .ai-summary-grid {
+    grid-template-columns: 1fr;
+  }
+  .ai-summary-col-actions {
+    grid-column: span 1;
+  }
+}
+
+/* Individual Column Panels */
+.ai-summary-col {
+  border-radius: 12px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.ai-summary-col:hover {
+  transform: translateY(-1px);
+}
+
+/* Column 1: Health Index */
+.ai-summary-col-health {
+  background: #F0F9FF;
+  border: 1px solid #E0F2FE;
+}
+
+/* Column 2: Lead Breakdown */
+.ai-summary-col-breakdown {
+  background: #FAF5FF;
+  border: 1px solid #F3E8FF;
+}
+
+/* Column 3: Recommended Actions */
+.ai-summary-col-actions {
+  background: #F0FDF4;
+  border: 1px solid #DCFCE7;
+}
+
+/* Column Header Row (Icon Badge + Uppercase Title) */
+.ai-summary-col-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.ai-summary-badge-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ai-summary-badge-health {
+  background: #BAE6FD;
+  color: #0284C7;
+}
+
+.ai-summary-badge-breakdown {
+  background: #E9D5FF;
+  color: #7C3AED;
+}
+
+.ai-summary-badge-actions {
+  background: #A7F3D0;
+  color: #059669;
+}
+
+.ai-summary-col-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748B;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* Health Content */
+.ai-summary-health-value {
+  font-size: 22px;
+  font-weight: 800;
+  color: #059669;
+  letter-spacing: -0.01em;
+  margin: 4px 0 10px 0;
+}
+
+.ai-summary-progress-track {
+  height: 7px;
+  background: #E2E8F0;
+  border-radius: 9999px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.ai-summary-progress-fill {
+  height: 100%;
+  background: #10B981;
+  border-radius: 9999px;
+  transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Breakdown 2x2 Grid */
+.ai-summary-breakdown-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 16px;
+  margin-top: 4px;
+}
+
+.ai-summary-breakdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  color: #334155;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.ai-summary-breakdown-item:hover {
+  color: #2563EB;
+}
+
+.ai-summary-breakdown-item strong {
+  font-weight: 700;
+  color: #0F172A;
+}
+
+/* Recommended Actions List */
+.ai-summary-actions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.ai-summary-action-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #334155;
+}
+
+.ai-summary-action-bullet {
+  color: #059669;
+  font-size: 13px;
+  line-height: 1.4;
+  flex-shrink: 0;
+}
+
+.ai-summary-action-item strong {
+  color: #0F172A;
+  font-weight: 700;
+}
+
+.ai-light-refresh-btn {
+  background: transparent;
+  border: none;
+  color: #059669;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.ai-light-refresh-btn:hover {
+  background: rgba(5, 150, 105, 0.12);
+}
+
+
