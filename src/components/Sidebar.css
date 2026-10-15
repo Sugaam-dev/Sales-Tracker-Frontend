@@ -4,32 +4,14 @@
   border-right: 1px solid rgba(59, 130, 246, 0.15);
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
   position: relative;
-  z-index: 50;
+  z-index: 30;
   box-shadow: 4px 0 24px rgba(2, 13, 38, 0.45);
   overflow: hidden;
 }
 
-/* Ambient white light radiating strictly and exclusively from the top-left corner */
-.sidebar::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 240px;
-  height: 240px;
-  background: radial-gradient(
-    circle at 0% 0%,
-    rgba(255, 255, 255, 0.55) 0%,
-    rgba(224, 242, 254, 0.28) 25%,
-    rgba(56, 189, 248, 0.1) 48%,
-    transparent 70%
-  );
-  pointer-events: none;
-  filter: blur(10px);
-  z-index: 1;
-}
+
 
 /* Ambient bottom wave illustration */
 .sidebar-waves-bg {
@@ -49,35 +31,11 @@
   object-fit: cover;
 }
 
-.sidebar-header {
-  height: 120px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px 20px 16px;
-  background: transparent;
-  position: relative;
-  z-index: 2;
-}
-
-.sidebar-logo-image {
-  width: 220px;
-  max-width: 100%;
-  height: auto;
-  object-fit: contain;
-  filter: drop-shadow(0 4px 12px rgba(0, 163, 255, 0.25));
-  transition: transform var(--transition-fast);
-}
-
-.sidebar-logo-image:hover {
-  transform: scale(1.02);
-}
-
 .sidebar-nav {
   position: relative;
   z-index: 2;
   flex: 1;
-  padding: 12px 14px;
+  padding: 24px 14px 16px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -132,133 +90,5 @@
   color: #FFFFFF;
 }
 
-.sidebar-footer {
-  position: relative;
-  z-index: 2;
-  padding: 16px 14px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  background: transparent;
-}
 
-.user-profile {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 10px;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: background 0.2s ease;
-}
-
-.user-profile:hover {
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.avatar {
-  width: 42px;
-  height: 42px;
-  border-radius: var(--radius-full);
-  background: linear-gradient(135deg, #2563EB 0%, #60A5FA 50%, #818CF8 100%);
-  color: #FFFFFF;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 15px;
-  box-shadow: 0 0 16px rgba(59, 130, 246, 0.55), 0 2px 6px rgba(0, 0, 0, 0.3);
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  flex-shrink: 0;
-}
-
-.user-info {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-width: 0;
-}
-
-.user-name {
-  font-weight: 600;
-  font-size: 0.9rem;
-  color: #FFFFFF;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.user-role {
-  font-size: 0.76rem;
-  color: #93C5FD;
-  font-weight: 400;
-  margin-top: 2px;
-}
-
-.chevron {
-  color: #94A3B8;
-  transition: transform var(--transition-fast);
-}
-
-.chevron.open {
-  transform: rotate(180deg);
-}
-
-.profile-dropdown {
-  position: absolute;
-  bottom: calc(100% + 10px);
-  left: 14px;
-  right: 14px;
-  background: rgba(2, 19, 61, 0.95);
-  backdrop-filter: blur(16px);
-  border: 1px solid rgba(59, 130, 246, 0.3);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6);
-  padding: 8px;
-  z-index: 100;
-  animation: dropdownPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-@keyframes dropdownPop {
-  from {
-    opacity: 0;
-    transform: translateY(6px) scale(0.97);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-.dropdown-item {
-  width: 100%;
-  padding: 9px 12px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: #E2E8F0;
-  border-radius: var(--radius-md);
-  text-align: left;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.dropdown-item:hover {
-  background-color: rgba(37, 99, 235, 0.25);
-  color: #FFFFFF;
-}
-
-.dropdown-item.logout {
-  color: #F87171;
-  margin-top: 4px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  padding-top: 10px;
-}
-
-.dropdown-item.logout:hover {
-  background-color: rgba(239, 68, 68, 0.18);
-  color: #FCA5A5;
-}
 

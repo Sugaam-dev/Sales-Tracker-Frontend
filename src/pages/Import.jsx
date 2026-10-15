@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   UploadCloud, 
+  Upload,
   FileSpreadsheet, 
   FileText, 
   Download, 
@@ -11,6 +12,10 @@ import {
   Plus, 
   ArrowLeft, 
   RefreshCw, 
+  ShieldCheck,
+  Zap,
+  Layers,
+  Info,
   X 
 } from 'lucide-react';
 import './Import.css';
@@ -18,6 +23,107 @@ import { bulkCreateLeads, extractDocumentLeads, fetchCurrentUsers, fetchMasterSt
 import { useToast } from '../context/FeedbackContext';
 import { COUNTRY_CODES, getCountryObj, normalizeCountryCode } from '../constants/countries';
 import { validatePhoneNumber } from '../utils/phoneValidation';
+
+// Decorative Top-Right Illustration
+function CsvHeaderIllustration() {
+  return (
+    <svg width="88" height="64" viewBox="0 0 88 64" fill="none" xmlns="http://www.w3.org/2000/svg" className="csv-header-illustration">
+      {/* Decorative leafy accents */}
+      <path d="M74 44C79 37 84 42 84 42C84 42 82 50 76 49C74 48 73 46 74 44Z" fill="#86EFAC" opacity="0.85"/>
+      <path d="M78 39C82 32 86 37 86 37C86 37 84 45 79 43Z" fill="#34D399" opacity="0.9"/>
+      <path d="M68 48C72 42 77 46 77 46C77 46 75 53 70 51Z" fill="#A7F3D0" opacity="0.75"/>
+      
+      {/* Small floating dots */}
+      <circle cx="10" cy="20" r="2.5" fill="#93C5FD" opacity="0.6"/>
+      <circle cx="82" cy="16" r="2" fill="#93C5FD" opacity="0.7"/>
+      <circle cx="76" cy="8" r="2.5" fill="#BFDBFE" opacity="0.5"/>
+
+      {/* Document Sheet */}
+      <g filter="drop-shadow(0 3px 8px rgba(37,99,235,0.08))">
+        <path d="M26 6C26 4.34315 27.3431 3 29 3H54L66 15V56C66 57.6569 64.6569 59 63 59H29C27.3431 59 26 57.6569 26 56V6Z" fill="#FFFFFF" stroke="#E2E8F0" strokeWidth="1.2"/>
+        <path d="M54 3V12C54 13.6569 55.3431 15 57 15H66" fill="#F8FAFC" stroke="#E2E8F0" strokeWidth="1.2"/>
+        {/* Document lines */}
+        <rect x="33" y="24" width="26" height="2" rx="1" fill="#E2E8F0"/>
+        <rect x="33" y="29" width="20" height="2" rx="1" fill="#E2E8F0"/>
+        <rect x="33" y="34" width="24" height="2" rx="1" fill="#E2E8F0"/>
+        
+        {/* CSV Blue Badge */}
+        <rect x="30" y="19" width="26" height="14" rx="3.5" fill="#0284C7"/>
+        <text x="43" y="29.5" fill="#FFFFFF" fontSize="8" fontWeight="800" fontFamily="sans-serif" textAnchor="middle" letterSpacing="0.4">CSV</text>
+      </g>
+
+      {/* Blue Upload Cloud */}
+      <g filter="drop-shadow(0 4px 8px rgba(37,99,235,0.22))">
+        <path d="M70 42C70 38.134 66.866 35 63 35C62.3514 35 61.7249 35.0883 61.131 35.2535C59.7171 32.024 56.489 29.75 52.7188 29.75C48.2916 29.75 44.6353 32.928 43.8336 37.1061C43.2486 36.8736 42.6063 36.75 41.9323 36.75C38.5915 36.75 35.8831 39.4922 35.8831 42.875C35.8831 46.2578 38.5915 49 41.9323 49H68.25C70.183 49 71.75 47.433 71.75 45.5C71.75 43.8926 70.6631 42.5392 69.1947 42.1102C69.7112 42.0385 70 42 70 42Z" fill="#3B82F6"/>
+        {/* Arrow inside cloud */}
+        <path d="M53.5 44.5V37.5M53.5 37.5L50 41M53.5 37.5L57 41" stroke="#FFFFFF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+      </g>
+    </svg>
+  );
+}
+
+// Dropzone Cloud Icon matching reference
+function DropzoneCloudIcon() {
+  return (
+    <svg width="68" height="52" viewBox="0 0 68 52" fill="none" xmlns="http://www.w3.org/2000/svg" className="dropzone-cloud-svg">
+      <path 
+        d="M51.5 35.5C54.5376 35.5 57 33.0376 57 30C57 26.9624 54.5376 24.5 51.5 24.5C51.2721 24.5 51.0478 24.5139 50.8277 24.5411C49.8055 18.0694 44.2275 13 37.4583 13C31.7808 13 26.9392 16.4293 24.9835 21.3639C23.9205 20.8358 22.7153 20.5455 21.4375 20.5455C17.2241 20.5455 13.8125 23.9571 13.8125 28.1705C13.8125 32.3838 17.2241 35.7955 21.4375 35.7955H51.5Z" 
+        fill="#3B82F6"
+      />
+      <path 
+        d="M35.5 31V21M35.5 21L31 25.5M35.5 21L40 25.5" 
+        stroke="#FFFFFF" 
+        strokeWidth="2.75" 
+        strokeLinecap="round" 
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+const CSV_REQUIREMENTS = [
+  { name: 'Company Name', example: 'e.g. ABC Corp' },
+  { name: 'Contact Person', example: 'e.g. John Doe' },
+  { name: 'Email Address', example: 'e.g. john@abc.com' },
+  { name: 'Phone', example: 'e.g. +91 9876543210' },
+  { name: 'Office Phone Number', example: 'e.g. +91 22 12345678' },
+  { name: 'Lead Owner', example: 'e.g. Sales Team' },
+  { name: 'Stage', example: 'e.g. New Lead' },
+  { name: 'Status', example: 'e.g. Open' },
+  { name: 'Sentiment', example: 'e.g. Positive' },
+  { name: 'Priority', example: 'e.g. High' }
+];
+
+const IMPORT_FEATURES = [
+  {
+    icon: ShieldCheck,
+    iconBg: '#DCFCE7',
+    iconColor: '#16A34A',
+    title: 'Secure',
+    desc: 'Your data is safe with us.'
+  },
+  {
+    icon: Zap,
+    iconBg: '#EDE9FE',
+    iconColor: '#7C3AED',
+    title: 'Fast Import',
+    desc: 'Import leads in seconds.'
+  },
+  {
+    icon: FileText,
+    iconBg: '#DBEAFE',
+    iconColor: '#2563EB',
+    title: 'Supports CSV',
+    desc: 'Works with standard CSV files.'
+  },
+  {
+    icon: CheckCircle2,
+    iconBg: '#F3E8FF',
+    iconColor: '#9333EA',
+    title: 'Easy Mapping',
+    desc: 'Match your data with our fields.'
+  }
+];
 
 export default function Import() {
   const showToast = useToast();
@@ -640,35 +746,45 @@ export default function Import() {
   };
 
   return (
-    <div className="import-container">
-      <div className="import-header">
-        <div>
-          <h1 className="page-title">Import Leads</h1>
-          <p className="text-sm text-muted">Upload and import leads seamlessly from CSV, PDF, or Word documents (.doc/.docx).</p>
+    <div className="import-page-container">
+      {/* Top Header */}
+      <div className="import-header-section">
+        <div className="import-header-title-block">
+          <h1 className="import-page-title">Import Leads</h1>
+          <p className="import-page-subtitle">Upload your CSV file to quickly import leads into the system.</p>
         </div>
-        <div className="header-actions">
-          {step === 'upload' && (
+
+        {step === 'upload' && (
+          <div className="import-header-action-block">
             <button 
               id="sample-download-btn"
-              className="btn-secondary" 
+              className="btn-download-sample-pill" 
               onClick={handleDownloadSample}
+              type="button"
             >
-              <Download size={18} />
-              Download Sample CSV
+              <Download size={16} strokeWidth={2} />
+              <span>Download Sample CSV</span>
             </button>
-          )}
-        </div>
+
+            <div className="header-illustration-wrap" title="CSV Document Upload">
+              <CsvHeaderIllustration />
+            </div>
+          </div>
+        )}
       </div>
 
       {step === 'upload' ? (
-        <div className="import-content">
-          <div className="card upload-card">
+        <div className="import-main-grid">
+          {/* Left Column: Dropzone + 4 Features */}
+          <div className="import-white-card upload-panel-card">
             <div 
-              className={`drop-zone ${isDragging ? 'dragging' : ''} ${isExtracting ? 'extracting' : ''}`}
+              className={`modern-csv-dropzone ${isDragging ? 'dragging' : ''} ${isExtracting ? 'extracting' : ''}`}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
               onClick={() => !isExtracting && fileInputRef.current.click()}
+              role="button"
+              tabIndex={0}
             >
               <input 
                 type="file" 
@@ -680,40 +796,90 @@ export default function Import() {
               />
               
               {isExtracting ? (
-                <div className="extracting-prompt">
-                  <RefreshCw size={48} className="text-primary spin" />
+                <div className="dropzone-extracting-state">
+                  <RefreshCw size={44} className="text-primary spin" />
                   <h3>Extracting lead data from document...</h3>
                   <p className="text-muted">Analyzing document tables, contact entries, and phone numbers</p>
                 </div>
               ) : (
-                <div className="upload-prompt">
-                  <UploadCloud size={52} className="text-primary" />
-                  <h3>Upload CSV, PDF, or Word document</h3>
-                  <p className="text-muted">Drag & drop your file here, or click to browse</p>
-                  <div className="supported-formats-pills">
-                    <span className="format-pill">CSV (.csv)</span>
-                    <span className="format-pill">PDF (.pdf)</span>
-                    <span className="format-pill">Word (.docx / .doc)</span>
+                <div className="dropzone-idle-content">
+                  <div className="dropzone-cloud-icon-container">
+                    <UploadCloud size={48} color="#2563EB" strokeWidth={2} />
                   </div>
-                  <span className="text-xs text-muted mt-2">Maximum file size: 10MB</span>
+                  <h3 className="dropzone-main-heading">Upload CSV, PDF, or Word document</h3>
+                  <p className="dropzone-sub-instruction">Drag & drop your file here, or click to browse</p>
+                  
+                  <div className="dropzone-format-pills">
+                    <span className="dropzone-pill">CSV (.csv)</span>
+                    <span className="dropzone-pill">PDF (.pdf)</span>
+                    <span className="dropzone-pill">Word (.docx / .doc)</span>
+                  </div>
+
+                  <p className="dropzone-size-limit">Maximum file size: 10MB</p>
                 </div>
               )}
             </div>
+
+            {/* 4 Feature Highlights Row */}
+            <div className="import-features-grid">
+              {IMPORT_FEATURES.map((feat, idx) => {
+                const IconComp = feat.icon;
+                return (
+                  <div key={idx} className="import-feature-item">
+                    <div 
+                      className="feature-icon-squircle"
+                      style={{ backgroundColor: feat.iconBg, color: feat.iconColor }}
+                    >
+                      <IconComp size={18} strokeWidth={2.4} />
+                    </div>
+                    <div className="feature-text-block">
+                      <h4 className="feature-heading">{feat.title}</h4>
+                      <p className="feature-description">{feat.desc}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
-          <div className="card requirements-card">
-            <div className="card-header">
-              <h3>Supported Formats & Fields</h3>
-              <p className="text-sm text-muted">We extract leads from Tables, Key-Value pairs, and Multi-lead blocks.</p>
+          {/* Right Column: CSV Format Requirements */}
+          <div className="import-white-card requirements-panel-card">
+            <div className="requirements-card-header">
+              <div className="requirements-layers-icon-box">
+                <Layers size={22} color="#2563EB" strokeWidth={2.2} />
+              </div>
+              <div className="requirements-header-text">
+                <h3 className="requirements-card-title">CSV Format Requirements</h3>
+                <p className="requirements-card-subtitle">Your CSV must include the following columns.</p>
+              </div>
             </div>
-            <ul className="mandatory-columns-list">
-              {mandatoryColumns.map((col, idx) => (
-                <li key={idx}>
-                  <CheckCircle2 size={16} className="text-success" />
-                  <span>{col}</span>
-                </li>
+
+            <div className="requirements-table-list">
+              {CSV_REQUIREMENTS.map((req, idx) => (
+                <div key={idx} className="requirement-list-row">
+                  <div className="requirement-field-left">
+                    <CheckCircle2 size={16} className="requirement-check-circle" strokeWidth={2.5} />
+                    <span className="requirement-field-name">{req.name}</span>
+                  </div>
+                  <div className="requirement-example-right">
+                    {req.example}
+                  </div>
+                </div>
               ))}
-            </ul>
+            </div>
+
+            {/* Bottom Callout Info Banner */}
+            <div 
+              className="requirements-info-callout" 
+              onClick={handleDownloadSample}
+              role="button"
+              tabIndex={0}
+            >
+              <Info size={17} className="callout-info-icon" strokeWidth={2.2} />
+              <span className="callout-info-text">
+                Need help? Download the sample CSV file to see the required format.
+              </span>
+            </div>
           </div>
         </div>
       ) : (

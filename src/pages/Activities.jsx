@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
+  Activity,
   Phone, 
   Mail, 
   Calendar, 
@@ -883,69 +884,107 @@ export default function Activities() {
         </div>
       </div>
 
-      {/* AI Summary Card for Activities */}
-      <div className="card ai-summary-premium-card">
-        <div className="ai-card-glow"></div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Sparkles size={20} style={{ color: '#FFFFFF' }} />
-            <h3 style={{ margin: 0, fontSize: '1.125rem', fontWeight: '600', color: 'white' }}>AI Productivity Assistant</h3>
+      {/* AI Summary Card for Activities (Matching Reference UI) */}
+      <div className="ai-summary-light-card" style={{ marginBottom: '24px' }}>
+        <div className="ai-summary-grid">
+          {/* 1. Today's Velocity */}
+          <div className="ai-summary-col ai-summary-col-health">
+            <div className="ai-summary-col-header">
+              <div className="ai-summary-badge-icon ai-summary-badge-health">
+                <Activity size={18} strokeWidth={2.4} />
+              </div>
+              <span className="ai-summary-col-title">Today's Velocity</span>
+            </div>
+            <div className="ai-summary-health-body">
+              <div className="ai-summary-health-value">
+                {summaryData.velocity_today_logged || 0} Logged
+              </div>
+              <div className="ai-summary-progress-track">
+                <div 
+                  className="ai-summary-progress-fill" 
+                  style={{ 
+                    width: `${summaryData.velocity_today_planned > 0 
+                      ? Math.min(100, Math.round(((summaryData.velocity_today_completed || 0) / summaryData.velocity_today_planned) * 100)) 
+                      : 88}%` 
+                  }}
+                ></div>
+              </div>
+              <div style={{ fontSize: '11.5px', color: '#64748B', marginTop: '6px', fontWeight: 500 }}>
+                <strong>{summaryData.velocity_today_completed || 0}</strong> Completed · <strong>{summaryData.velocity_today_planned || 0}</strong> Planned
+              </div>
+            </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <button 
-              onClick={handleRefreshAi} 
-              disabled={isAiLoading} 
-              title="Refresh AI Insights"
-              style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#FFFFFF' }}
-            >
-              <RefreshCw size={18} style={{ animation: isAiLoading ? 'rotateSparkle 1.5s infinite linear' : 'none' }} />
-            </button>
-            <button 
-              onClick={() => setIsAiExpanded(!isAiExpanded)} 
-              title={isAiExpanded ? "Collapse Insights" : "Expand Insights"}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#FFFFFF' }}
-            >
-              {isAiExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-            </button>
-          </div>
-        </div>
 
-        <div 
-          style={{ 
-            maxHeight: isAiExpanded ? '500px' : '0px', 
-            overflow: 'hidden', 
-            transition: 'max-height 300ms ease-in-out, opacity 300ms ease-in-out, padding 300ms ease-in-out',
-            opacity: isAiExpanded ? 1 : 0
-          }}
-        >
-          {isAiLoading ? (
-            <div className="ai-skeleton-loader" style={{ padding: '16px 0' }}>
-              <div className="skeleton-item" style={{ height: '16px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', marginBottom: '8px', width: '80%' }}></div>
-              <div className="skeleton-item" style={{ height: '16px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', marginBottom: '8px', width: '60%' }}></div>
-              <div className="skeleton-item" style={{ height: '16px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', width: '40%' }}></div>
+          {/* 2. Tasks Health */}
+          <div className="ai-summary-col ai-summary-col-breakdown">
+            <div className="ai-summary-col-header">
+              <div className="ai-summary-badge-icon ai-summary-badge-breakdown">
+                <Clock size={18} strokeWidth={2.4} />
+              </div>
+              <span className="ai-summary-col-title">Tasks Health</span>
             </div>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', paddingTop: '16px' }}>
-              <div className="ai-premium-stat-box">
-                <div className="ai-premium-stat-title">Today's Velocity</div>
-                <div className="ai-premium-stat-value" style={{ color: '#34D399' }}>{summaryData.velocity_today_logged} Logged</div>
-                <div className="ai-premium-stat-desc">{summaryData.velocity_today_completed} Completed · {summaryData.velocity_today_planned} Planned</div>
+            <div className="ai-summary-breakdown-grid">
+              <div 
+                className="ai-summary-breakdown-item" 
+                onClick={() => handleOpenActivityModal('Overdue Tasks')} 
+                title="View Overdue Tasks"
+              >
+                <span>⚠️</span> <span><strong>{summaryData.overdue_count || 0}</strong> Overdue</span>
               </div>
-              <div className="ai-premium-stat-box">
-                <div className="ai-premium-stat-title">Tasks Health</div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '13px' }}>
-                  <span style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={() => handleOpenActivityModal('Overdue Tasks')}>⚠️ {summaryData.overdue_count} Overdue</span>
-                  <span style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={() => handleOpenActivityModal('Upcoming Tasks')}>📅 {summaryData.upcoming_count} Upcoming</span>
-                </div>
+              <div 
+                className="ai-summary-breakdown-item" 
+                onClick={() => handleOpenActivityModal('Upcoming Tasks')} 
+                title="View Upcoming Tasks"
+              >
+                <span>📅</span> <span><strong>{summaryData.upcoming_count || 0}</strong> Upcoming</span>
               </div>
-              <div className="ai-premium-recommendation-box">
-                <div className="ai-premium-recommendation-title">AI Performance Recommendation</div>
-                <div className="ai-premium-recommendation-text">
-                  ⚡ **Automated Execution:** Log calls and send proposals directly from this page to maintain seamless CRM audit history and shorten sales velocity cycles.
-                </div>
+              <div 
+                className="ai-summary-breakdown-item" 
+                onClick={() => handleOpenActivityModal('Overdue Tasks')} 
+                title="View Completed Velocity"
+              >
+                <span style={{ color: '#10B981', fontWeight: 'bold' }}>☑️</span> <span><strong>{summaryData.velocity_today_completed || 0}</strong> Completed</span>
+              </div>
+              <div 
+                className="ai-summary-breakdown-item" 
+                onClick={() => handleOpenActivityModal('Upcoming Tasks')} 
+                title="View Planned Tasks"
+              >
+                <span style={{ color: '#2563EB', fontWeight: 'bold' }}>📋</span> <span><strong>{summaryData.velocity_today_planned || 0}</strong> Planned</span>
               </div>
             </div>
-          )}
+          </div>
+
+          {/* 3. AI Performance Recommendations */}
+          <div className="ai-summary-col ai-summary-col-actions">
+            <div className="ai-summary-col-header" style={{ justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div className="ai-summary-badge-icon ai-summary-badge-actions">
+                  <Sparkles size={18} strokeWidth={2.4} />
+                </div>
+                <span className="ai-summary-col-title">AI Performance Recommendations</span>
+              </div>
+              <button 
+                onClick={handleRefreshAi} 
+                disabled={isAiLoading} 
+                title="Refresh AI Insights"
+                className="ai-light-refresh-btn"
+                type="button"
+              >
+                <RefreshCw size={14} className={isAiLoading ? 'spin' : ''} style={{ animation: isAiLoading ? 'rotateSparkle 1.5s infinite linear' : 'none' }} />
+              </button>
+            </div>
+            <div className="ai-summary-actions-list">
+              <div className="ai-summary-action-item">
+                <span className="ai-summary-action-bullet">◆</span>
+                <span><strong>"Stark Industries"</strong> follow-up call is overdue. Schedule call to discuss the tax waiver.</span>
+              </div>
+              <div className="ai-summary-action-item">
+                <span className="ai-summary-action-bullet">◆</span>
+                <span><strong>Automated Execution:</strong> Log calls and send proposals directly from this page to shorten velocity cycles.</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 

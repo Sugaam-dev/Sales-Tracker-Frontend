@@ -3,7 +3,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
   PieChart, Pie, Legend as RechartsLegend,
 } from 'recharts';
-import { Sparkles, RefreshCw, ChevronUp, ChevronDown } from 'lucide-react';
+import { Sparkles, RefreshCw, ChevronUp, ChevronDown, TrendingUp, Target } from 'lucide-react';
 import LeadHeatMap from './LeadHeatMap';
 import { fetchReportsAnalytics } from '../services/leadService';
 import { SkeletonCard, SkeletonChart } from '../components/common/Skeleton';
@@ -209,67 +209,87 @@ export default function Reports() {
       ) : (
         <>
 
-      {/* AI Summary Card for Reports */}
-      <div className="card ai-summary-premium-card" style={{ marginTop: '16px' }}>
-        <div className="ai-card-glow"></div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Sparkles size={20} style={{ color: '#FFFFFF' }} />
-            <h3 style={{ margin: 0, fontSize: '1.125rem', fontWeight: '600', color: 'white' }}>AI Revenue &amp; Growth Insights</h3>
+      {/* AI Summary Card for Reports (Matching Reference UI) */}
+      <div className="ai-summary-light-card" style={{ marginTop: '16px', marginBottom: '24px' }}>
+        <div className="ai-summary-grid">
+          {/* 1. Revenue Momentum */}
+          <div className="ai-summary-col ai-summary-col-health">
+            <div className="ai-summary-col-header">
+              <div className="ai-summary-badge-icon ai-summary-badge-health">
+                <TrendingUp size={18} strokeWidth={2.4} />
+              </div>
+              <span className="ai-summary-col-title">Revenue Momentum</span>
+            </div>
+            <div className="ai-summary-health-body">
+              <div className="ai-summary-health-value">
+                {revenueMomentumText}
+              </div>
+              <div className="ai-summary-progress-track">
+                <div 
+                  className="ai-summary-progress-fill" 
+                  style={{ width: `${Math.min(100, Math.max(15, winRate || 78))}%` }}
+                ></div>
+              </div>
+              <div style={{ fontSize: '11.5px', color: '#64748B', marginTop: '6px', fontWeight: 500 }}>
+                <strong>${currentRevenue.toLocaleString()}</strong> Total Closed Pipeline
+              </div>
+            </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <button 
-              onClick={handleRefreshAi} 
-              disabled={isAiLoading} 
-              title="Refresh AI Insights"
-              style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#FFFFFF' }}
-            >
-              <RefreshCw size={18} style={{ animation: isAiLoading ? 'rotateSparkle 1.5s infinite linear' : 'none' }} />
-            </button>
-            <button 
-              onClick={() => setIsAiExpanded(!isAiExpanded)} 
-              title={isAiExpanded ? "Collapse Insights" : "Expand Insights"}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#FFFFFF' }}
-            >
-              {isAiExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-            </button>
-          </div>
-        </div>
 
-        <div 
-          style={{ 
-            maxHeight: isAiExpanded ? '500px' : '0px', 
-            overflow: 'hidden', 
-            transition: 'max-height 300ms ease-in-out, opacity 300ms ease-in-out, padding 300ms ease-in-out',
-            opacity: isAiExpanded ? 1 : 0
-          }}
-        >
-          {isAiLoading ? (
-            <div className="ai-skeleton-loader" style={{ padding: '16px 0' }}>
-              <div className="skeleton-item" style={{ height: '16px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', marginBottom: '8px', width: '80%' }}></div>
-              <div className="skeleton-item" style={{ height: '16px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', marginBottom: '8px', width: '60%' }}></div>
-              <div className="skeleton-item" style={{ height: '16px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', width: '40%' }}></div>
+          {/* 2. Conversion Analytics */}
+          <div className="ai-summary-col ai-summary-col-breakdown">
+            <div className="ai-summary-col-header">
+              <div className="ai-summary-badge-icon ai-summary-badge-breakdown">
+                <Target size={18} strokeWidth={2.4} />
+              </div>
+              <span className="ai-summary-col-title">Conversion Analytics</span>
             </div>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', paddingTop: '16px' }}>
-              <div className="ai-premium-stat-box">
-                <div className="ai-premium-stat-title">Revenue Momentum</div>
-                <div className="ai-premium-stat-value" style={{ color: '#34D399' }}>{revenueMomentumText}</div>
-                <div className="ai-premium-stat-desc">${currentRevenue.toLocaleString()} Total Value</div>
+            <div className="ai-summary-breakdown-grid">
+              <div className="ai-summary-breakdown-item" title="Win Rate">
+                <span style={{ color: '#10B981', fontWeight: 'bold' }}>🎯</span> <span><strong>{winRate}%</strong> Win Rate</span>
               </div>
-              <div className="ai-premium-stat-box">
-                <div className="ai-premium-stat-title">Conversion Analytics</div>
-                <div className="ai-premium-stat-value" style={{ color: '#93C5FD' }}>{winRate}% Win Rate</div>
-                <div className="ai-premium-stat-desc">Average cycle: {avgCycle} days</div>
+              <div className="ai-summary-breakdown-item" title="Average Sales Cycle">
+                <span>⏱️</span> <span><strong>{avgCycle}</strong> Days Cycle</span>
               </div>
-              <div className="ai-premium-recommendation-box">
-                <div className="ai-premium-recommendation-title">Strategic Close Recommendation</div>
-                <div className="ai-premium-recommendation-text">
-                  📈 **Channel Velocity:** Real-time analytics indicates highest revenue velocity across qualified proposals. Ensure high-tier opportunities receive dedicated executive review.
+              <div className="ai-summary-breakdown-item" title="Deals Won">
+                <span>🏆</span> <span><strong>{reportsData.conversion_analytics?.won_count || 0}</strong> Won</span>
+              </div>
+              <div className="ai-summary-breakdown-item" title="Deals Lost">
+                <span style={{ color: '#EF4444', fontWeight: 'bold' }}>❌</span> <span><strong>{reportsData.conversion_analytics?.lost_count || 0}</strong> Lost</span>
+              </div>
+            </div>
+          </div>
+
+          {/* 3. AI Strategic Recommendations */}
+          <div className="ai-summary-col ai-summary-col-actions">
+            <div className="ai-summary-col-header" style={{ justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div className="ai-summary-badge-icon ai-summary-badge-actions">
+                  <Sparkles size={18} strokeWidth={2.4} />
                 </div>
+                <span className="ai-summary-col-title">AI Strategic Recommendations</span>
+              </div>
+              <button 
+                onClick={handleRefreshAi} 
+                disabled={isAiLoading} 
+                title="Refresh AI Insights"
+                className="ai-light-refresh-btn"
+                type="button"
+              >
+                <RefreshCw size={14} className={isAiLoading ? 'spin' : ''} style={{ animation: isAiLoading ? 'rotateSparkle 1.5s infinite linear' : 'none' }} />
+              </button>
+            </div>
+            <div className="ai-summary-actions-list">
+              <div className="ai-summary-action-item">
+                <span className="ai-summary-action-bullet">◆</span>
+                <span><strong>Channel Velocity:</strong> Real-time analytics indicates highest revenue velocity across qualified proposals.</span>
+              </div>
+              <div className="ai-summary-action-item">
+                <span className="ai-summary-action-bullet">◆</span>
+                <span><strong>Executive Review:</strong> Ensure Tier 1 enterprise contracts (e.g., <strong>"Stark Industries"</strong>) receive dedicated review.</span>
               </div>
             </div>
-          )}
+          </div>
         </div>
       </div>
 
@@ -282,25 +302,13 @@ export default function Reports() {
           <div className="chart-wrapper">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={pipelineStageData} margin={{ top: 10, right: 10, left: 30, bottom: 35 }}>
-                <XAxis 
-                  dataKey="name" 
-                  tick={{ fontSize: 11, fill: '#FFFFFF' }} 
-                  stroke="#8FA4C7"
-                  interval={0} 
-                  angle={-30} 
-                  textAnchor="end" 
-                  height={70} 
-                />
-                <YAxis 
-                  tickFormatter={formatCurrency} 
-                  tick={{ fontSize: 11, fill: '#FFFFFF' }} 
-                  stroke="#8FA4C7"
-                />
+                <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-30} textAnchor="end" height={70} />
+                <YAxis tickFormatter={formatCurrency} tick={{ fontSize: 11 }} />
                  <Tooltip 
                    formatter={(value) => `$${value.toLocaleString()}`} 
-                   contentStyle={{ backgroundColor: '#101F3E', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '8px', fontSize: '13px', color: '#FFFFFF', boxShadow: '0 8px 24px rgba(5, 12, 28, 0.6)' }}
-                   labelStyle={{ color: '#FFFFFF', fontWeight: 'bold' }}
-                   itemStyle={{ color: '#FFFFFF' }}
+                   contentStyle={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }}
+                   labelStyle={{ color: 'var(--color-text-main)', fontWeight: 'bold' }}
+                   itemStyle={{ color: 'var(--color-primary)' }}
                  />
                 <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                   {pipelineStageData.map((entry, index) => (
@@ -335,17 +343,11 @@ export default function Reports() {
                 </Pie>
                 <Tooltip 
                   formatter={(value) => `${value}%`} 
-                  contentStyle={{ backgroundColor: '#101F3E', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '8px', fontSize: '13px', color: '#FFFFFF', boxShadow: '0 8px 24px rgba(5, 12, 28, 0.6)' }}
-                  labelStyle={{ color: '#FFFFFF', fontWeight: 'bold' }}
-                  itemStyle={{ color: '#FFFFFF' }}
+                  contentStyle={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }}
+                  labelStyle={{ color: 'var(--color-text-main)', fontWeight: 'bold' }}
+                  itemStyle={{ color: 'var(--color-primary)' }}
                 />
-                <RechartsLegend 
-                  layout="vertical" 
-                  verticalAlign="middle" 
-                  align="right" 
-                  wrapperStyle={{ fontSize: '12px' }}
-                  formatter={(value) => <span style={{ color: '#FFFFFF' }}>{value}</span>}
-                />
+                <RechartsLegend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{ fontSize: '12px' }} />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -359,30 +361,16 @@ export default function Reports() {
           <div className="chart-wrapper">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={repPerformanceData} layout="vertical" margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
-                <XAxis 
-                  type="number" 
-                  tickFormatter={formatCurrency} 
-                  tick={{ fontSize: 11, fill: '#FFFFFF' }} 
-                  stroke="#8FA4C7"
-                />
-                <YAxis 
-                  dataKey="name" 
-                  type="category" 
-                  tick={{ fontSize: 11, fill: '#FFFFFF' }} 
-                  stroke="#8FA4C7"
-                  width={60} 
-                />
+                <XAxis type="number" tickFormatter={formatCurrency} tick={{ fontSize: 11 }} />
+                <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} width={60} />
                 <Tooltip 
-                  cursor={{ fill: 'rgba(37, 99, 235, 0.15)' }} 
+                  cursor={{ fill: 'rgba(226, 232, 240, 0.3)' }} 
                   formatter={(value) => `$${value.toLocaleString()}`} 
-                  contentStyle={{ backgroundColor: '#101F3E', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '8px', fontSize: '13px', color: '#FFFFFF', boxShadow: '0 8px 24px rgba(5, 12, 28, 0.6)' }}
-                  labelStyle={{ color: '#FFFFFF', fontWeight: 'bold' }}
-                  itemStyle={{ color: '#FFFFFF' }}
+                  contentStyle={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }}
+                  labelStyle={{ color: 'var(--color-text-main)', fontWeight: 'bold' }}
+                  itemStyle={{ color: 'var(--color-primary)' }}
                 />
-                <RechartsLegend 
-                  wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }}
-                  formatter={(value) => <span style={{ color: '#FFFFFF' }}>{value}</span>}
-                />
+                <RechartsLegend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
                 <Bar dataKey="won" name="Won" stackId="a" fill="#10B981" />
                 <Bar dataKey="pipeline" name="Pipeline" stackId="a" fill="#3B82F6" />
                 <Bar dataKey="lost" name="Lost" stackId="a" fill="#EF4444" radius={[0, 4, 4, 0]} />
@@ -414,17 +402,11 @@ export default function Reports() {
                 </Pie>
                 <Tooltip 
                   formatter={(value) => `${value}%`} 
-                  contentStyle={{ backgroundColor: '#101F3E', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '8px', fontSize: '13px', color: '#FFFFFF', boxShadow: '0 8px 24px rgba(5, 12, 28, 0.6)' }}
-                  labelStyle={{ color: '#FFFFFF', fontWeight: 'bold' }}
-                  itemStyle={{ color: '#FFFFFF' }}
+                  contentStyle={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }}
+                  labelStyle={{ color: 'var(--color-text-main)', fontWeight: 'bold' }}
+                  itemStyle={{ color: 'var(--color-primary)' }}
                 />
-                <RechartsLegend 
-                  layout="vertical" 
-                  verticalAlign="middle" 
-                  align="right" 
-                  wrapperStyle={{ fontSize: '12px' }}
-                  formatter={(value) => <span style={{ color: '#FFFFFF' }}>{value}</span>}
-                />
+                <RechartsLegend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{ fontSize: '12px' }} />
               </PieChart>
             </ResponsiveContainer>
           </div>

@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import LeadProfile, { LIFECYCLE_PIPELINES } from './LeadProfile';
-import { X, Edit2, Trash2, Phone, Mail, Calendar, Download, Plus, MoreVertical, Sparkles, Calculator, RotateCcw } from 'lucide-react';
+import { X, Edit2, Trash2, Phone, Mail, Calendar, Download, Plus, MoreVertical, Sparkles, Calculator, RotateCcw, Activity, Users } from 'lucide-react';
 import { fetchLeads, fetchLeadById, updateLead, createLead, deleteLead } from '../services/leadService';
 import { useToast, useConfirm } from '../context/FeedbackContext';
 import { useMasterData } from '../context/MasterDataContext';
 import { SkeletonTable, SkeletonBlock } from '../components/common/Skeleton';
+import QuickCreateLeadModal from '../components/QuickCreateLeadModal';
 import './Leads.css';
 
 import { initialLeadsData } from './mockLeads';
@@ -32,6 +33,82 @@ export default function Leads() {
       setEditStatus(selectedLead.status || 'New');
     }
   }, [isEditModalOpen, selectedLead]);
+
+  // Quick Create Lead Modal
+  const [isQuickModalOpen, setIsQuickModalOpen] = useState(false);
+
+  const handleQuickCreateLead = async (data) => {
+    try {
+      const cleanPhone = String(data.phone).replace(/\D/g, '');
+      let statusPayload = 'Open';
+      const lowercaseStatus = String(data.status).toLowerCase();
+      if (['open', 'new', 'contacted', 'interested', 'negotiation'].includes(lowercaseStatus)) {
+        statusPayload = 'Open';
+      } else if (lowercaseStatus === 'in progress' || lowercaseStatus === 'analysis') {
+        statusPayload = 'In Progress';
+      } else if (lowercaseStatus === 'won' || lowercaseStatus === 'closed won') {
+        statusPayload = 'Won';
+      } else if (lowercaseStatus === 'lost' || lowercaseStatus === 'closed lost') {
+        statusPayload = 'Lost';
+      }
+
+      let callingCode = '+91';
+      if (data.countryCode) {
+        const match = data.countryCode.match(/\+\d+/);
+        callingCode = match ? match[0] : data.countryCode;
+      }
+
+      const payload = {
+        company: data.companyName,
+        contact: data.leadName,
+        email: data.email,
+        phone: cleanPhone,
+        officePhone: cleanPhone,
+        countryCode: callingCode,
+        owner: data.owner,
+        stage: 'Qualification',
+        status: statusPayload,
+        sentiment: 'Neutral',
+        priority: data.priority,
+        kamName: data.leadName,
+        requestType: data.requestType,
+        requestDetails: data.requestDetails,
+        basicRequirements: data.requestDetails,
+        estimatedRequirementDate: data.estDate || '',
+      };
+
+      const res = await createLead(payload);
+      const created = res?.data || res;
+      if (created && created.id) {
+        setLeads(prev => [created, ...prev]);
+      }
+      setIsQuickModalOpen(false);
+      showToast('Lead created successfully', 'success');
+
+      try {
+        const refreshed = await fetchLeads({
+          page: 1,
+          limit: leadsPerPage,
+          search: debouncedSearch,
+          owner: ownerFilter,
+          stage: stageFilter,
+          priority: priorityFilter,
+          sortBy,
+          sortOrder,
+        });
+        if (refreshed?.data) {
+          setLeads(refreshed.data);
+          if (refreshed.pagination) setPagination(refreshed.pagination);
+        }
+      } catch (e) {
+        console.error('Failed to refresh leads after quick create:', e);
+      }
+    } catch (err) {
+      console.error('Quick Create Error:', err);
+      throw err;
+    }
+  };
+
   const [leadsPerPage, setLeadsPerPage] = useState(10);
   const [classificationLead, setClassificationLead] = useState(null);
   const [classStatus, setClassStatus] = useState('New');
@@ -445,15 +522,30 @@ export default function Leads() {
 
   return (
     <div className="leads-container">
-      <div className="leads-header" style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
-        <h1 className="page-title" style={{ margin: 0 }}>Leads Management</h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <span style={{ color: 'var(--color-text-muted)', fontSize: '14px' }}>{leads.length} leads total</span>
-          <button onClick={handleExportCSV} className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', fontSize: '14px' }}>
-            <Download size={14} /> Export CSV
-          </button>
-          <button className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', fontSize: '14px' }} onClick={() => { setIsCreatingLead(true); setSelectedLead(null); }}>
-            <Plus size={14} /> New Lead
+      <div className="leads-page-header">
+        <div className="leads-header-left">
+          <h1 className="page-title" style={{ margin: 0 }}>Leads Management</h1>
+          <div className="leads-header-subrow">
+            <span className="leads-total-counter">{pagination.total || leads.length} leads total</span>
+            <button onClick={handleExportCSV} className="btn-secondary btn-export-leads" type="button">
+              <Download size={14} />
+              <span>Export CSV</span>
+            </button>
+            <button className="btn-secondary btn-new-lead-form" type="button" onClick={() => { setIsCreatingLead(true); setSelectedLead(null); }}>
+              <Plus size={14} />
+              <span>New Lead</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="leads-header-right">
+          <button 
+            className="btn-primary btn-quick-create-lead-page" 
+            onClick={() => setIsQuickModalOpen(true)}
+            type="button"
+          >
+            <Plus size={16} strokeWidth={2.4} />
+            <span>Quick Create Lead</span>
           </button>
         </div>
       </div>
@@ -552,37 +644,66 @@ export default function Leads() {
           />
         ) : (
           <>
-            {/* AI Summary Card for Leads */}
-            <div className="card ai-summary-premium-card">
-              <div className="ai-card-glow"></div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-                <Sparkles size={20} style={{ color: '#FFFFFF' }} />
-                <h3 style={{ margin: 0, fontSize: '1.125rem', fontWeight: '600', color: 'white' }}>AI Lead Health & Pipeline Assistant</h3>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
-                <div className="ai-premium-stat-box">
-                  <div className="ai-premium-stat-title">Lead Health Index</div>
-                  <div className="ai-premium-stat-value" style={{ color: '#34D399' }}>88% Excellent</div>
-                  <div style={{ height: '4px', background: 'rgba(255,255,255,0.15)', borderRadius: '2px', overflow: 'hidden', marginTop: '6px' }}>
-                    <div style={{ width: '88%', height: '100%', background: '#34D399' }}></div>
+            {/* AI Summary Card for Leads (Matching Reference UI) */}
+            <div className="ai-summary-light-card">
+              <div className="ai-summary-grid">
+                {/* 1. Lead Health Index */}
+                <div className="ai-summary-col ai-summary-col-health">
+                  <div className="ai-summary-col-header">
+                    <div className="ai-summary-badge-icon ai-summary-badge-health">
+                      <Activity size={18} strokeWidth={2.4} />
+                    </div>
+                    <span className="ai-summary-col-title">Lead Health Index</span>
+                  </div>
+                  <div className="ai-summary-health-body">
+                    <div className="ai-summary-health-value">88% Excellent</div>
+                    <div className="ai-summary-progress-track">
+                      <div className="ai-summary-progress-fill" style={{ width: '88%' }}></div>
+                    </div>
                   </div>
                 </div>
-                <div className="ai-premium-stat-box">
-                  <div className="ai-premium-stat-title">Lead Breakdown</div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px', fontSize: '13px' }}>
-                    <span style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={() => handleOpenBreakdown('Hot Leads', hotLeads)}>🔥 {hotLeads.length} Hot Leads</span>
-                    <span style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={() => handleOpenBreakdown('Cold Leads', coldLeads)}>❄️ {coldLeads.length} Cold Leads</span>
+
+                {/* 2. Lead Breakdown */}
+                <div className="ai-summary-col ai-summary-col-breakdown">
+                  <div className="ai-summary-col-header">
+                    <div className="ai-summary-badge-icon ai-summary-badge-breakdown">
+                      <Users size={18} strokeWidth={2.4} />
+                    </div>
+                    <span className="ai-summary-col-title">Lead Breakdown</span>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px', fontSize: '13px' }}>
-                    <span style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={() => handleOpenBreakdown('Qualified Leads', qualifiedLeads)}>✅ {qualifiedLeads.length} Qualified</span>
-                    <span style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={() => handleOpenBreakdown('Lost Leads', lostLeads)}>❌ {lostLeads.length} Lost</span>
+                  <div className="ai-summary-breakdown-grid">
+                    <div className="ai-summary-breakdown-item" onClick={() => handleOpenBreakdown('Hot Leads', hotLeads)} title="View Hot Leads">
+                      <span>🔥</span> <span><strong>{hotLeads.length}</strong> Hot Leads</span>
+                    </div>
+                    <div className="ai-summary-breakdown-item" onClick={() => handleOpenBreakdown('Cold Leads', coldLeads)} title="View Cold Leads">
+                      <span>❄️</span> <span><strong>{coldLeads.length}</strong> Cold Leads</span>
+                    </div>
+                    <div className="ai-summary-breakdown-item" onClick={() => handleOpenBreakdown('Qualified Leads', qualifiedLeads)} title="View Qualified Leads">
+                      <span style={{ color: '#10B981', fontWeight: 'bold' }}>☑️</span> <span><strong>{qualifiedLeads.length}</strong> Qualified</span>
+                    </div>
+                    <div className="ai-summary-breakdown-item" onClick={() => handleOpenBreakdown('Lost Leads', lostLeads)} title="View Lost Leads">
+                      <span style={{ color: '#EF4444', fontWeight: 'bold' }}>❌</span> <span><strong>{lostLeads.length}</strong> Lost</span>
+                    </div>
                   </div>
                 </div>
-                <div className="ai-premium-recommendation-box">
-                  <div className="ai-premium-recommendation-title">AI Recommended Actions</div>
-                  <div className="ai-premium-recommendation-text">
-                    👉 **Stark Industries** is stalling in Negotiation. Schedule call to discuss the tax waiver. <br/>
-                    👉 **Wayne Enterprises** has high close intent (85%). Email draft contract today.
+
+                {/* 3. AI Recommended Actions */}
+                <div className="ai-summary-col ai-summary-col-actions">
+                  <div className="ai-summary-col-header">
+                    <div className="ai-summary-badge-icon ai-summary-badge-actions">
+                      <Sparkles size={18} strokeWidth={2.4} />
+                    </div>
+                    <span className="ai-summary-col-title">AI Recommended Actions</span>
+                  </div>
+                  <div className="ai-summary-actions-list">
+                    <div className="ai-summary-action-item">
+                      <span className="ai-summary-action-bullet">◆</span>
+                      <span><strong>"Stark Industries"</strong> is stalling in Negotiation. Schedule call to discuss the tax waiver.</span>
+                    </div>
+                    <div className="ai-summary-action-item">
+                      <span className="ai-summary-action-bullet">◆</span>
+                      <span><strong>"Wayne Enterprises"</strong> has high close intent (85%). Email draft contract today.</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1491,6 +1612,12 @@ export default function Leads() {
           </div>
         </div>
       )}
+
+      <QuickCreateLeadModal
+        isOpen={isQuickModalOpen}
+        onClose={() => setIsQuickModalOpen(false)}
+        onCreate={handleQuickCreateLead}
+      />
     </div>
   );
 }

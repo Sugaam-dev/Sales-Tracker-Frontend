@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { DollarSign, Percent, AlertCircle, CheckCircle2, X, Sparkles, RefreshCw, Trash2, Edit2, PlusCircle, ChevronUp, ChevronDown } from 'lucide-react';
+import { DollarSign, Percent, AlertCircle, CheckCircle2, X, Sparkles, RefreshCw, Trash2, Edit2, PlusCircle, Plus, ChevronUp, ChevronDown, Activity, Users } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import KpiCard from '../components/KpiCard';
+import QuickCreateLeadModal from '../components/QuickCreateLeadModal';
 import { initialLeadsData } from './mockLeads';
-import { fetchDashboardSummary, fetchLeads, fetchActivitiesFeed, fetchCurrentUsers, fetchTasks, createTask, updateTaskStatus, deleteTask } from '../services/leadService';
+import { fetchDashboardSummary, fetchLeads, fetchActivitiesFeed, fetchCurrentUsers, fetchTasks, createTask, updateTaskStatus, deleteTask, createLead } from '../services/leadService';
 import { normalizeError } from '../services/apiError';
 import { useToast } from '../context/FeedbackContext';
 import { useMasterData } from '../context/MasterDataContext';
@@ -31,10 +32,80 @@ export default function Dashboard() {
     region_distribution: []
   });
 
+  // Dynamic breakdown counts for AI Summary Card (matching reference UI)
+  const hotLeadsCount = initialLeadsData.filter(l => l.status !== 'Won' && l.status !== 'Lost' && (l.sentiment === 'Positive' || l.sentiment === 'Interested') && (l.priority === 'High' || l.priority === 'Urgent')).length || 7;
+  const coldLeadsCount = initialLeadsData.filter(l => l.status !== 'Won' && l.status !== 'Lost' && (l.score < 50 || l.sentiment === 'Negative' || l.sentiment === 'Not Interested')).length || 0;
+  const qualifiedLeadsCount = initialLeadsData.filter(l => l.stage === 'Qualification' || l.status === 'Qualified').length || 2;
+  const lostLeadsCount = dashboardData.lost_leads_count || initialLeadsData.filter(l => l.status === 'Lost' || l.stage === 'Closed Lost').length || 0;
+
   // Filters State
   const [ownerFilter, setOwnerFilter] = useState('');
   const [regionFilter, setRegionFilter] = useState('');
   const usersList = masterUsersList;
+
+  // Quick Create Lead Modal State
+  const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
+
+  const handleCreateLead = async (data) => {
+    try {
+      const cleanPhone = String(data.phone).replace(/\D/g, '');
+      let statusPayload = 'Open';
+      const lowercaseStatus = String(data.status).toLowerCase();
+      if (['open', 'new', 'contacted', 'interested', 'negotiation'].includes(lowercaseStatus)) {
+        statusPayload = 'Open';
+      } else if (lowercaseStatus === 'in progress' || lowercaseStatus === 'analysis') {
+        statusPayload = 'In Progress';
+      } else if (lowercaseStatus === 'won' || lowercaseStatus === 'closed won') {
+        statusPayload = 'Won';
+      } else if (lowercaseStatus === 'lost' || lowercaseStatus === 'closed lost') {
+        statusPayload = 'Lost';
+      }
+
+      let callingCode = '+91';
+      if (data.countryCode) {
+        const match = data.countryCode.match(/\+\d+/);
+        callingCode = match ? match[0] : data.countryCode;
+      }
+
+      const payload = {
+        company: data.companyName,
+        contact: data.leadName,
+        email: data.email,
+        phone: cleanPhone,
+        officePhone: cleanPhone,
+        countryCode: callingCode,
+        owner: data.owner,
+        stage: 'Qualification',
+        status: statusPayload,
+        sentiment: 'Neutral',
+        priority: data.priority,
+        kamName: data.leadName,
+        requestType: data.requestType,
+        requestDetails: data.requestDetails,
+        basicRequirements: data.requestDetails,
+        estimatedRequirementDate: data.estDate || '',
+      };
+
+      await createLead(payload);
+      setIsQuickCreateOpen(false);
+      showToast('Lead created successfully', 'success');
+
+      // Refresh summary metrics
+      const queryParams = {};
+      if (ownerFilter) queryParams.owner = ownerFilter;
+      if (regionFilter) queryParams.region = regionFilter;
+      fetchDashboardSummary(queryParams)
+        .then((resp) => {
+          if (resp && resp.data) {
+            setDashboardData(resp.data);
+          }
+        })
+        .catch(console.error);
+    } catch (err) {
+      console.error('Quick Create Error:', err);
+      throw err;
+    }
+  };
 
   const [isAiExpanded, setIsAiExpanded] = useState(() => {
     const saved = sessionStorage.getItem('isAiExpanded');
@@ -408,14 +479,14 @@ export default function Dashboard() {
   return (
     <div className="dashboard-container">
         {/* Dashboard Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+        <div className="dashboard-top-header">
           <h1 className="page-title" style={{ margin: 0 }}> Dashboard </h1>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div className="dashboard-header-right-zone">
             {usersList.length > 0 && (
               <select
                 value={ownerFilter}
                 onChange={(e) => setOwnerFilter(e.target.value)}
-                style={{ padding: '6px 12px', fontSize: '13px', borderRadius: '6px', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-surface)', color: 'var(--color-text-main)' }}
+                className="dashboard-filter-select"
               >
                 <option value="">All Owners</option>
                 {usersList.map((u, i) => (
@@ -426,7 +497,7 @@ export default function Dashboard() {
             <select
               value={regionFilter}
               onChange={(e) => setRegionFilter(e.target.value)}
-              style={{ padding: '6px 12px', fontSize: '13px', borderRadius: '6px', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-surface)', color: 'var(--color-text-main)' }}
+              className="dashboard-filter-select"
             >
               <option value="">All Regions</option>
               <option value="North America">North America</option>
@@ -435,7 +506,16 @@ export default function Dashboard() {
               <option value="LATAM">LATAM</option>
               <option value="India">India</option>
             </select>
-            {loading && <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Updating...</span>}
+            {loading && <span className="dashboard-updating-indicator">Updating...</span>}
+
+            <button
+              className="btn-primary btn-dashboard-quick-create"
+              onClick={() => setIsQuickCreateOpen(true)}
+              type="button"
+            >
+              <Plus size={16} strokeWidth={2.4} />
+              <span>Quick Create Lead</span>
+            </button>
           </div>
         </div>
 
@@ -467,57 +547,79 @@ export default function Dashboard() {
             )}
         </div>
 
-        {/* AI Summary Card */}
-        <div className="card ai-summary-card" style={{ marginBottom: '24px' }}>
-          <div className="ai-card-glow"></div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Sparkles size={20} style={{ color: '#FFFFFF' }} />
-              <h3 style={{ margin: 0, fontSize: '1.125rem', fontWeight: '600', color: 'white' }}>AI Sales Insights & Summary</h3>
+        {/* AI Summary Card (Matching Reference UI) */}
+        <div className="ai-summary-light-card">
+          <div className="ai-summary-grid">
+            {/* 1. Lead Health Index */}
+            <div className="ai-summary-col ai-summary-col-health">
+              <div className="ai-summary-col-header">
+                <div className="ai-summary-badge-icon ai-summary-badge-health">
+                  <Activity size={18} strokeWidth={2.4} />
+                </div>
+                <span className="ai-summary-col-title">Lead Health Index</span>
+              </div>
+              <div className="ai-summary-health-body">
+                <div className="ai-summary-health-value">88% Excellent</div>
+                <div className="ai-summary-progress-track">
+                  <div className="ai-summary-progress-fill" style={{ width: '88%' }}></div>
+                </div>
+              </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <button className="ai-sparkle-btn" onClick={handleRefreshAi} disabled={isAiLoading} title="Refresh AI Insights">
-                <RefreshCw size={18} className={isAiLoading ? 'spin' : ''} style={{ animation: isAiLoading ? 'rotateSparkle 1.5s infinite linear' : 'none' }} />
-              </button>
-              <button 
-                className="ai-sparkle-btn" 
-                onClick={() => setIsAiExpanded(!isAiExpanded)} 
-                title={isAiExpanded ? "Collapse Insights" : "Expand Insights"}
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-              >
-                {isAiExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-              </button>
-            </div>
-          </div>
 
-          <div 
-            style={{ 
-              maxHeight: isAiExpanded ? '500px' : '0px', 
-              overflow: 'hidden', 
-              transition: 'max-height 300ms ease-in-out, opacity 300ms ease-in-out, padding 300ms ease-in-out',
-              opacity: isAiExpanded ? 1 : 0,
-              paddingTop: isAiExpanded ? '16px' : '0px'
-            }}
-          >
-            {isAiLoading ? (
-              <div className="ai-skeleton-loader">
-                <div className="skeleton-item"></div>
-                <div className="skeleton-item"></div>
-                <div className="skeleton-item"></div>
+            {/* 2. Lead Breakdown */}
+            <div className="ai-summary-col ai-summary-col-breakdown">
+              <div className="ai-summary-col-header">
+                <div className="ai-summary-badge-icon ai-summary-badge-breakdown">
+                  <Users size={18} strokeWidth={2.4} />
+                </div>
+                <span className="ai-summary-col-title">Lead Breakdown</span>
               </div>
-            ) : (
-              <div className="ai-insights-list">
-                {aiInsights.map((insight, i) => (
-                  <div key={i} className="ai-insight-item">
-                    <div className="ai-insight-icon">{insight.icon}</div>
-                    <div className="ai-insight-content">
-                      <span className="ai-insight-badge">{insight.badge}</span>
-                      <p className="ai-insight-text">{insight.text}</p>
-                    </div>
+              <div className="ai-summary-breakdown-grid">
+                <div className="ai-summary-breakdown-item" onClick={() => navigate('/leads')} title="View Hot Leads">
+                  <span>🔥</span> <span><strong>{hotLeadsCount}</strong> Hot Leads</span>
+                </div>
+                <div className="ai-summary-breakdown-item" onClick={() => navigate('/leads')} title="View Cold Leads">
+                  <span>❄️</span> <span><strong>{coldLeadsCount}</strong> Cold Leads</span>
+                </div>
+                <div className="ai-summary-breakdown-item" onClick={() => navigate('/leads')} title="View Qualified Leads">
+                  <span style={{ color: '#10B981', fontWeight: 'bold' }}>☑️</span> <span><strong>{qualifiedLeadsCount}</strong> Qualified</span>
+                </div>
+                <div className="ai-summary-breakdown-item" onClick={() => navigate('/leads')} title="View Lost Leads">
+                  <span style={{ color: '#EF4444', fontWeight: 'bold' }}>❌</span> <span><strong>{lostLeadsCount}</strong> Lost</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. AI Recommended Actions */}
+            <div className="ai-summary-col ai-summary-col-actions">
+              <div className="ai-summary-col-header" style={{ justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div className="ai-summary-badge-icon ai-summary-badge-actions">
+                    <Sparkles size={18} strokeWidth={2.4} />
                   </div>
-                ))}
+                  <span className="ai-summary-col-title">AI Recommended Actions</span>
+                </div>
+                <button 
+                  onClick={handleRefreshAi} 
+                  disabled={isAiLoading} 
+                  title="Refresh AI Insights"
+                  className="ai-light-refresh-btn"
+                  type="button"
+                >
+                  <RefreshCw size={14} className={isAiLoading ? 'spin' : ''} style={{ animation: isAiLoading ? 'rotateSparkle 1.5s infinite linear' : 'none' }} />
+                </button>
               </div>
-            )}
+              <div className="ai-summary-actions-list">
+                <div className="ai-summary-action-item">
+                  <span className="ai-summary-action-bullet">◆</span>
+                  <span><strong>"Stark Industries"</strong> is stalling in Negotiation. Schedule call to discuss the tax waiver.</span>
+                </div>
+                <div className="ai-summary-action-item">
+                  <span className="ai-summary-action-bullet">◆</span>
+                  <span><strong>"Wayne Enterprises"</strong> has high close intent (85%). Email draft contract today.</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -542,26 +644,21 @@ export default function Dashboard() {
                                 bottom: 5
                             }}
                         >
-                            <XAxis 
-                                type="number" 
-                                tick={{ fill: "#FFFFFF", fontSize: 12 }} 
-                                stroke="#8FA4C7"
-                            />
+                            <XAxis type="number" />
                             <YAxis
                                 dataKey="name"
                                 type="category"
                                 width={130}
                                 tick={{
-                                    fill: "#FFFFFF",
+                                    fill: "var(--color-text-muted)",
                                     fontSize: 12
                                 }}
-                                stroke="#8FA4C7"
                             />
                              <Tooltip
-                                cursor={{ fill: "rgba(37, 99, 235, 0.15)" }}
-                                contentStyle={{ backgroundColor: '#101F3E', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '8px', fontSize: '13px', color: '#FFFFFF', boxShadow: '0 8px 24px rgba(5, 12, 28, 0.6)' }}
-                                labelStyle={{ color: '#FFFFFF', fontWeight: 'bold' }}
-                                itemStyle={{ color: '#FFFFFF' }}
+                                cursor={{ fill: "rgba(226, 232, 240, 0.3)" }}
+                                contentStyle={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '13px' }}
+                                labelStyle={{ color: 'var(--color-text-main)', fontWeight: 'bold' }}
+                                itemStyle={{ color: 'var(--color-primary)' }}
                              />
                             <Bar
                                 dataKey="deals"
@@ -951,6 +1048,12 @@ export default function Dashboard() {
                 </div>
             </div>
         )}
+
+      <QuickCreateLeadModal
+        isOpen={isQuickCreateOpen}
+        onClose={() => setIsQuickCreateOpen(false)}
+        onCreate={handleCreateLead}
+      />
     </div>
-);
+  );
 }

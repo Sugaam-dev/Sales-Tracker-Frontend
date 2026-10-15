@@ -81,8 +81,8 @@ export default function ChangePassword() {
     <div className="auth-container">
       <div className="auth-card">
         <div className="auth-header">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginBottom: '16px' }}>
-            <img src="/logo.png" alt="PMRG Solution Logo" style={{ height: '48px', objectFit: 'contain', maxWidth: '100%' }} />
+          <div className="auth-logo-wrap">
+            <img src="/logo.png" alt="PMRG Solution Logo" />
           </div>
           <h2>Change Your Password</h2>
           <p>Please set a new secure password to proceed.</p>
@@ -92,13 +92,14 @@ export default function ChangePassword() {
           <div
             style={{
               color: '#2563EB',
-              backgroundColor: 'rgba(37, 99, 235, 0.08)',
+              backgroundColor: '#EFF6FF',
               padding: '10px 14px',
-              borderRadius: '6px',
+              borderRadius: '10px',
               marginBottom: '16px',
               fontSize: '13px',
+              fontWeight: '500',
               textAlign: 'center',
-              border: '1px solid rgba(37, 99, 235, 0.2)',
+              border: '1px solid #BFDBFE',
             }}
           >
             {noticeMessage}
@@ -114,7 +115,7 @@ export default function ChangePassword() {
         ) : (
           <form onSubmit={handleSubmit} className="auth-form">
             <div className="form-group">
-              <label>New password</label>
+              <label>NEW PASSWORD</label>
               <div className="password-input-wrapper">
                 <input
                   name="newPassword"
@@ -128,6 +129,7 @@ export default function ChangePassword() {
                   className="toggle-password"
                   onClick={() => setShowPassword(!showPassword)}
                   disabled={loading}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
@@ -138,7 +140,7 @@ export default function ChangePassword() {
             </div>
 
             <div className="form-group">
-              <label>Confirm new password</label>
+              <label>CONFIRM NEW PASSWORD</label>
               <div className="password-input-wrapper">
                 <input
                   name="confirmPassword"

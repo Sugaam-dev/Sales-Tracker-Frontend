@@ -6,20 +6,22 @@ import AiAssistant from './AiAssistant';
 
 export default function Layout({ user, onLogout }) {
   return (
-    <div className="app-container">
-      <Sidebar
-        user={user}
-        onLogout={onLogout}
-      />
+    <div className="app-shell">
+      <Header user={user} onLogout={onLogout} />
 
-      <div className="main-content">
-        <Header />
+      <div className="app-body">
+        <Sidebar
+          user={user}
+          onLogout={onLogout}
+        />
 
-        <div className="page-scroll">
-          <Outlet />
+        <div className="main-content">
+          <div className="page-scroll">
+            <Outlet />
+          </div>
+
+          <AiAssistant />
         </div>
-
-        <AiAssistant />
       </div>
     </div>
   );

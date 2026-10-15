@@ -53,8 +53,8 @@ export default function MfaVerify({ onLogin }) {
     <div className="auth-container">
       <div className="auth-card">
         <div className="auth-header">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginBottom: '16px' }}>
-            <img src="/logo.png" alt="PMRG Solution Logo" style={{ height: '48px', objectFit: 'contain', maxWidth: '100%' }} />
+          <div className="auth-logo-wrap">
+            <img src="/logo.png" alt="PMRG Solution Logo" />
           </div>
           <h2>Two-factor verification</h2>
           <p>Enter the 6-digit code we sent you to finish signing in.</p>
@@ -64,7 +64,7 @@ export default function MfaVerify({ onLogin }) {
 
         <form onSubmit={handleSubmit} className="auth-form">
           <div className="form-group">
-            <label>Verification code</label>
+            <label>VERIFICATION CODE</label>
             <input
               className="otp-input"
               type="text"
